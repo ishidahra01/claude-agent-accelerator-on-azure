@@ -47,9 +47,10 @@ Unlike simple chat interfaces, **Claude Agent SDK** provides:
 ### This Sample Demonstrates
 
 - ✅ **CLAUDE.md**: Agent behavior and domain expertise in `.claude/CLAUDE.md`
-- ✅ **Custom Skill**: Azure Well-Architected Framework knowledge in `.claude/skills/azure-well-architected/`
-- ✅ **Subagents**: Security Analyzer and Cost Optimizer in `.claude/agents/`
-- ✅ **Real Agentic Work**: Multi-step analysis, not just Q&A
+- ✅ **Custom Skills**: Azure Well-Architected Framework knowledge in `src/skills/azure-waf.ts` (using SDK `tool()` function)
+- ✅ **Subagents**: Security Analyzer and Cost Optimizer configured via SDK `agents` option
+- ✅ **SDK Integration**: Uses `query()` API from `@anthropic-ai/claude-agent-sdk` (v0.2.92)
+- ✅ **Real Agentic Work**: Multi-step analysis with autonomous tool usage, not just Q&A
 
 ---
 
@@ -135,14 +136,16 @@ Azure Container Apps offers:
 ## Features Demonstrated
 
 ### 1. Claude Agent SDK Integration
-- Main agent orchestration with `CLAUDE.md` instructions
-- Custom skill: Azure Well-Architected Framework knowledge
-- Subagents for specialized analysis (security, cost)
-- Autonomous tool usage (file reading, JSON parsing)
+- **SDK Version**: `@anthropic-ai/claude-agent-sdk` v0.2.92 (latest official release)
+- **Agent Orchestration**: Uses `query()` API for autonomous execution loops
+- **Custom Skills**: Azure Well-Architected Framework tools defined with SDK `tool()` function and Zod schemas (`src/skills/azure-waf.ts`)
+- **Subagents**: Security Analyzer and Cost Optimizer configured via SDK `agents` option in `MainAgent` class
+- **System Prompts**: CLAUDE.md and subagent instructions loaded from `.claude/` directory
+- **Autonomous Tool Usage**: Agent can call WAF tools, delegate to subagents, and synthesize results
 
 ### 2. Microsoft Foundry Integration
 - Claude model hosted on Azure-native endpoints
-- Authentication via API key or Microsoft Entra ID
+- Authentication via Foundry API key (compatible with SDK's `apiKey` and `baseURL` options)
 - Optimized for Azure region latency
 
 ### 3. Azure Container Apps Deployment
@@ -285,6 +288,95 @@ npm run dev
 ```
 
 For a full demo script: See [docs/demo-guide.md](docs/demo-guide.md)
+
+---
+
+## Code Structure
+
+### Key Implementation Files
+
+```
+src/
+├── agent/
+│   └── main-agent.ts          # Main agent using Claude Agent SDK query() API
+├── skills/
+│   └── azure-waf.ts           # Azure Well-Architected Framework tools (SDK tool() function)
+├── observability/
+│   ├── tracing.ts             # OpenTelemetry integration
+│   └── evaluation.ts          # Quality/safety evaluation
+├── types/
+│   └── index.ts               # TypeScript type definitions
+└── index.ts                   # Entry point
+
+.claude/
+├── CLAUDE.md                  # Main agent instructions
+└── agents/
+    ├── security-analyzer.md   # Security subagent instructions
+    └── cost-optimizer.md      # Cost subagent instructions
+```
+
+### How It Works
+
+**1. Main Agent Setup** (`src/agent/main-agent.ts`):
+```typescript
+import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
+import { azureWafSkills } from '../skills/azure-waf.js';
+
+// Configure agent with skills and subagents
+const agentOptions: Options = {
+  apiKey: foundryApiKey,
+  baseURL: foundryBaseUrl,
+  model: 'claude-sonnet-4-5',
+  systemPrompt: claudeMd,          // From .claude/CLAUDE.md
+  tools: azureWafSkills,            // Custom WAF tools
+  agents: {
+    'security-analyzer': {
+      systemPrompt: securityAnalyzerMd,
+      tools: azureWafSkills,
+    },
+    'cost-optimizer': {
+      systemPrompt: costOptimizerMd,
+      tools: azureWafSkills,
+    },
+  },
+};
+```
+
+**2. Custom Skills** (`src/skills/azure-waf.ts`):
+```typescript
+import { tool } from '@anthropic-ai/claude-agent-sdk';
+import { z } from 'zod';
+
+export const getWafGuidanceTool = tool(
+  'get_waf_guidance',
+  'Get Azure Well-Architected Framework best practices',
+  {
+    pillar: z.enum(['security', 'cost', 'reliability', 'performance', 'operational']),
+    context: z.string().optional(),
+  },
+  async ({ pillar, context }) => {
+    // Return WAF guidance based on pillar
+    return { content: [{ type: 'text', text: guidance }] };
+  }
+);
+```
+
+**3. Agent Execution** (`src/agent/main-agent.ts`):
+```typescript
+const iterator = query({
+  prompt: analysisPrompt,
+  options: agentOptions,
+});
+
+for await (const msg of iterator) {
+  if (msg.type === 'assistant') {
+    // Handle agent responses
+  }
+  if (msg.type === 'agent_start') {
+    console.log(`Subagent Started: ${msg.agentName}`);
+  }
+}
+```
 
 ---
 
