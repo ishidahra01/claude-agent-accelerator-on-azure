@@ -3,34 +3,61 @@
  * Orchestrates analysis using Claude Agent SDK with subagents
  */
 
+import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import type { AnalysisRequest, AnalysisReport, AzureResource } from '../types/index.js';
-import { FoundryClient } from '../models/foundry-client.js';
+import { azureWafSkills } from '../skills/azure-waf.js';
 import { withTracing, recordEvent, recordAttribute } from '../observability/tracing.js';
 import { evaluateAnalysisReport, logEvaluationResults } from '../observability/evaluation.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+/**
+ * Main Agent for Azure Resource Analysis
+ */
 export class MainAgent {
-  private foundryClient: FoundryClient;
-  private claudeMd: string;
-  private securityAnalyzerMd: string;
-  private costOptimizerMd: string;
+  private apiKey: string;
+  private baseUrl: string;
+  private model: string;
+  private agentOptions: Options;
 
-  constructor(foundryClient: FoundryClient) {
-    this.foundryClient = foundryClient;
+  constructor(apiKey: string, baseUrl: string, model: string) {
+    this.apiKey = apiKey;
+    this.baseUrl = baseUrl;
+    this.model = model;
 
     // Load agent instructions
     const claudePath = join(__dirname, '../../.claude/CLAUDE.md');
     const securityPath = join(__dirname, '../../.claude/agents/security-analyzer.md');
     const costPath = join(__dirname, '../../.claude/agents/cost-optimizer.md');
 
-    this.claudeMd = readFileSync(claudePath, 'utf-8');
-    this.securityAnalyzerMd = readFileSync(securityPath, 'utf-8');
-    this.costOptimizerMd = readFileSync(costPath, 'utf-8');
+    const claudeMd = readFileSync(claudePath, 'utf-8');
+    const securityAnalyzerMd = readFileSync(securityPath, 'utf-8');
+    const costOptimizerMd = readFileSync(costPath, 'utf-8');
+
+    // Configure agent with subagents and skills
+    this.agentOptions = {
+      apiKey: this.apiKey,
+      baseURL: this.baseUrl,
+      model: this.model,
+      systemPrompt: claudeMd,
+      tools: azureWafSkills, // Main agent has access to WAF skills
+      agents: {
+        // Security Analyzer Subagent
+        'security-analyzer': {
+          systemPrompt: securityAnalyzerMd,
+          tools: azureWafSkills, // Subagent also has WAF skills
+        },
+        // Cost Optimizer Subagent
+        'cost-optimizer': {
+          systemPrompt: costOptimizerMd,
+          tools: azureWafSkills, // Subagent also has WAF skills
+        },
+      },
+    };
   }
 
   /**
@@ -43,30 +70,35 @@ export class MainAgent {
 
       console.log(`\nAnalyzing ${request.resources.length} Azure resources...`);
       console.log(`Scope: ${request.scope || 'all'}`);
-      console.log(`Model: ${this.foundryClient.getModel()}\n`);
+      console.log(`Model: ${this.model}\n`);
 
       const resourcesSummary = this.summarizeResources(request.resources);
 
-      // Perform analysis based on scope
-      const securityFindings = (request.scope === 'security' || request.scope === 'all' || !request.scope)
-        ? await this.analyzeSecurityWithTracing(resourcesSummary)
-        : [];
+      // Build analysis prompt based on scope
+      let analysisPrompt = `You are analyzing Azure infrastructure resources. `;
+      analysisPrompt += `You have access to the Azure Well-Architected Framework through your skills.\n\n`;
+      analysisPrompt += `Resources to analyze:\n${resourcesSummary}\n\n`;
 
-      const costOptimizations = (request.scope === 'cost' || request.scope === 'all' || !request.scope)
-        ? await this.analyzeCostWithTracing(resourcesSummary)
-        : [];
+      if (request.scope === 'security' || !request.scope || request.scope === 'all') {
+        analysisPrompt += `Delegate security analysis to the 'security-analyzer' subagent. `;
+      }
 
-      // Create analysis report
-      const report: AnalysisReport = {
-        summary: {
-          resourcesAnalyzed: request.resources.length,
-          securityFindings: securityFindings.length,
-          costSavingsOpportunities: costOptimizations.length,
-          architectureRecommendations: 0,
-        },
-        security: securityFindings.length > 0 ? securityFindings : undefined,
-        cost: costOptimizations.length > 0 ? costOptimizations : undefined,
-      };
+      if (request.scope === 'cost' || !request.scope || request.scope === 'all') {
+        analysisPrompt += `Delegate cost optimization analysis to the 'cost-optimizer' subagent. `;
+      }
+
+      analysisPrompt += `\n\nProvide a comprehensive JSON report with the following structure:\n`;
+      analysisPrompt += `{\n`;
+      analysisPrompt += `  "summary": { "resourcesAnalyzed": number, "securityFindings": number, "costSavingsOpportunities": number },\n`;
+      analysisPrompt += `  "security": [{ "severity": "Critical|High|Medium|Low", "resource": "...", "finding": "...", "remediation": "..." }],\n`;
+      analysisPrompt += `  "cost": [{ "resource": "...", "currentCost": "...", "recommendation": "...", "savings": "...", "savingsPercentage": "..." }]\n`;
+      analysisPrompt += `}\n`;
+
+      // Run agent with Claude Agent SDK
+      const result = await this.runAgent(analysisPrompt);
+
+      // Parse the analysis report
+      const report = this.parseAnalysisReport(result, request.resources.length);
 
       // Evaluate report if enabled
       if (process.env.ENABLE_EVALUATION === 'true') {
@@ -84,6 +116,63 @@ export class MainAgent {
   }
 
   /**
+   * Run agent using Claude Agent SDK query() API
+   */
+  private async runAgent(prompt: string): Promise<string> {
+    let fullResponse = '';
+
+    console.log('\n=== Starting Agent Execution ===\n');
+
+    try {
+      const iterator = query({
+        prompt,
+        options: this.agentOptions,
+      });
+
+      for await (const msg of iterator) {
+        if (msg.type === 'assistant') {
+          for (const chunk of msg.message.content) {
+            if (chunk.type === 'text') {
+              fullResponse += chunk.text;
+              // Log streaming output for visibility
+              process.stdout.write('.');
+            }
+            // Handle tool use
+            if (chunk.type === 'tool_use') {
+              console.log(`\n[Tool Used: ${chunk.name}]`);
+            }
+          }
+
+          // Log token usage
+          if (msg.message.usage) {
+            recordEvent('agent-response', {
+              'usage.inputTokens': msg.message.usage.input_tokens,
+              'usage.outputTokens': msg.message.usage.output_tokens,
+            });
+          }
+        }
+
+        // Handle subagent delegation
+        if (msg.type === 'agent_start') {
+          console.log(`\n[Subagent Started: ${msg.agentName || 'unknown'}]`);
+        }
+
+        if (msg.type === 'agent_end') {
+          console.log(`\n[Subagent Completed: ${msg.agentName || 'unknown'}]`);
+        }
+      }
+
+      console.log('\n\n=== Agent Execution Complete ===\n');
+
+    } catch (error) {
+      console.error('Agent execution error:', error);
+      throw error;
+    }
+
+    return fullResponse;
+  }
+
+  /**
    * Summarize resources for analysis
    */
   private summarizeResources(resources: AzureResource[]): string {
@@ -92,88 +181,70 @@ export class MainAgent {
       type: r.type,
       location: r.location,
       properties: r.properties,
+      sku: r.sku,
+      tags: r.tags,
     }));
     return JSON.stringify(summary, null, 2);
   }
 
   /**
-   * Analyze security with tracing
+   * Parse analysis report from agent response
    */
-  private async analyzeSecurityWithTracing(resourcesSummary: string): Promise<any[]> {
-    return withTracing('security-analysis', async () => {
-      console.log('Running security analysis...');
-
-      const systemPrompt = `${this.claudeMd}\n\n${this.securityAnalyzerMd}`;
-      const userMessage = `Analyze these Azure resources for security issues:\n\n${resourcesSummary}\n\nProvide findings in JSON format with the structure: {category, severity, resource, finding, threat, remediation, effort, compliance, priority}`;
-
-      const response = await this.foundryClient.sendMessage(
-        [{ role: 'user', content: userMessage }],
-        systemPrompt,
-        4096
-      );
-
-      recordEvent('security-analysis-completed', {
-        'response.stopReason': response.stop_reason,
-        'response.usage.inputTokens': response.usage.input_tokens,
-        'response.usage.outputTokens': response.usage.output_tokens,
-      });
-
-      return this.parseJsonResponse(response.content);
-    });
-  }
-
-  /**
-   * Analyze cost with tracing
-   */
-  private async analyzeCostWithTracing(resourcesSummary: string): Promise<any[]> {
-    return withTracing('cost-analysis', async () => {
-      console.log('Running cost optimization analysis...');
-
-      const systemPrompt = `${this.claudeMd}\n\n${this.costOptimizerMd}`;
-      const userMessage = `Analyze these Azure resources for cost optimization opportunities:\n\n${resourcesSummary}\n\nProvide findings in JSON format with the structure: {category, resource, currentCost, finding, recommendation, savings, savingsPercentage, effort, risk, priority}`;
-
-      const response = await this.foundryClient.sendMessage(
-        [{ role: 'user', content: userMessage }],
-        systemPrompt,
-        4096
-      );
-
-      recordEvent('cost-analysis-completed', {
-        'response.stopReason': response.stop_reason,
-        'response.usage.inputTokens': response.usage.input_tokens,
-        'response.usage.outputTokens': response.usage.output_tokens,
-      });
-
-      return this.parseJsonResponse(response.content);
-    });
-  }
-
-  /**
-   * Parse JSON from Claude's response
-   */
-  private parseJsonResponse(content: any[]): any[] {
+  private parseAnalysisReport(response: string, resourceCount: number): AnalysisReport {
     try {
-      const textContent = content.find(c => c.type === 'text');
-      if (!textContent) return [];
-
-      const text = textContent.text;
-
-      // Try to extract JSON array from response
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      // Try to extract JSON from response
+      const jsonMatch = response.match(/\{[\s\S]*"summary"[\s\S]*\}/);
       if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+        const parsed = JSON.parse(jsonMatch[0]);
+        return parsed;
       }
 
-      // If no array found, try to extract individual JSON objects
-      const objectMatches = text.match(/\{[\s\S]*?\}/g);
-      if (objectMatches) {
-        return objectMatches.map(m => JSON.parse(m));
+      // Fallback: try to find individual arrays
+      const securityMatch = response.match(/"security":\s*\[([\s\S]*?)\]/);
+      const costMatch = response.match(/"cost":\s*\[([\s\S]*?)\]/);
+
+      const report: AnalysisReport = {
+        summary: {
+          resourcesAnalyzed: resourceCount,
+          securityFindings: 0,
+          costSavingsOpportunities: 0,
+          architectureRecommendations: 0,
+        },
+      };
+
+      if (securityMatch) {
+        try {
+          const security = JSON.parse(`[${securityMatch[1]}]`);
+          report.security = security;
+          report.summary.securityFindings = security.length;
+        } catch (e) {
+          console.warn('Failed to parse security findings');
+        }
       }
 
-      return [];
+      if (costMatch) {
+        try {
+          const cost = JSON.parse(`[${costMatch[1]}]`);
+          report.cost = cost;
+          report.summary.costSavingsOpportunities = cost.length;
+        } catch (e) {
+          console.warn('Failed to parse cost findings');
+        }
+      }
+
+      return report;
     } catch (error) {
-      console.error('Failed to parse JSON response:', error);
-      return [];
+      console.error('Failed to parse analysis report:', error);
+
+      // Return empty report as fallback
+      return {
+        summary: {
+          resourcesAnalyzed: resourceCount,
+          securityFindings: 0,
+          costSavingsOpportunities: 0,
+          architectureRecommendations: 0,
+        },
+      };
     }
   }
 }

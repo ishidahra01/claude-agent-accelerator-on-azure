@@ -21,6 +21,7 @@ export interface AzureResource {
   type: string;
   location: string;
   properties: Record<string, any>;
+  sku?: Record<string, any>;
   tags?: Record<string, string>;
 }
 

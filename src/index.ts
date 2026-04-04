@@ -7,7 +7,6 @@ import 'dotenv/config';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { createFoundryClientFromEnv } from './models/foundry-client.js';
 import { MainAgent } from './agent/main-agent.js';
 import { initializeTracing } from './observability/tracing.js';
 import type { AnalysisRequest } from './types/index.js';
@@ -24,12 +23,20 @@ async function main() {
   // Initialize observability
   initializeTracing();
 
-  // Create Foundry client
-  const foundryClient = createFoundryClientFromEnv();
-  console.log(`Model: ${foundryClient.getModel()}`);
+  // Get Foundry configuration from environment
+  const apiKey = process.env.FOUNDRY_API_KEY || process.env.ANTHROPIC_API_KEY;
+  const baseUrl = process.env.FOUNDRY_BASE_URL || 'https://api.anthropic.com';
+  const model = process.env.FOUNDRY_MODEL || 'claude-sonnet-4-5';
 
-  // Create main agent
-  const agent = new MainAgent(foundryClient);
+  if (!apiKey) {
+    throw new Error('FOUNDRY_API_KEY or ANTHROPIC_API_KEY environment variable is required');
+  }
+
+  console.log(`Model: ${model}`);
+  console.log(`Base URL: ${baseUrl}\n`);
+
+  // Create main agent with Claude Agent SDK
+  const agent = new MainAgent(apiKey, baseUrl, model);
 
   // Load sample Azure resource export
   const examplePath = join(__dirname, '../examples/sample-azure-export.json');
@@ -42,7 +49,7 @@ async function main() {
     format: 'json',
   };
 
-  // Run analysis
+  // Run analysis with Claude Agent SDK
   const report = await agent.analyzeResources(request);
 
   // Display results
