@@ -1,0 +1,135 @@
+[
+  {
+    "id": "test-001",
+    "description": "Storage account with public access and no firewall",
+    "resources": [
+      {
+        "name": "proddata001",
+        "type": "Microsoft.Storage/storageAccounts",
+        "properties": {
+          "allowBlobPublicAccess": true,
+          "networkAcls": {
+            "defaultAction": "Allow"
+          },
+          "minimumTlsVersion": "TLS1_0"
+        }
+      }
+    ],
+    "expectedFindings": {
+      "security": [
+        {
+          "severity": "Critical",
+          "category": "Data Protection",
+          "keywords": ["public access", "firewall", "TLS"]
+        }
+      ]
+    }
+  },
+  {
+    "id": "test-002",
+    "description": "Oversized dev VM running 24/7",
+    "resources": [
+      {
+        "name": "dev-webserver-01",
+        "type": "Microsoft.Compute/virtualMachines",
+        "properties": {
+          "hardwareProfile": {
+            "vmSize": "Standard_B2s"
+          }
+        },
+        "tags": {
+          "environment": "development"
+        }
+      }
+    ],
+    "expectedFindings": {
+      "cost": [
+        {
+          "category": "Rightsizing",
+          "keywords": ["downsize", "development", "savings"]
+        }
+      ]
+    }
+  },
+  {
+    "id": "test-003",
+    "description": "Web app without HTTPS enforcement",
+    "resources": [
+      {
+        "name": "production-api",
+        "type": "Microsoft.Web/sites",
+        "properties": {
+          "httpsOnly": false,
+          "siteConfig": {
+            "minTlsVersion": "1.0"
+          }
+        },
+        "tags": {
+          "environment": "production"
+        }
+      }
+    ],
+    "expectedFindings": {
+      "security": [
+        {
+          "severity": "High",
+          "category": "Network Security",
+          "keywords": ["HTTPS", "TLS", "encryption"]
+        }
+      ]
+    }
+  },
+  {
+    "id": "test-004",
+    "description": "Unattached premium disk",
+    "resources": [
+      {
+        "name": "dev-unattached-disk-01",
+        "type": "Microsoft.Compute/disks",
+        "properties": {
+          "diskState": "Unattached",
+          "sku": {
+            "name": "Premium_LRS"
+          },
+          "diskSizeGB": 128
+        },
+        "tags": {
+          "environment": "development"
+        }
+      }
+    ],
+    "expectedFindings": {
+      "cost": [
+        {
+          "category": "Waste",
+          "keywords": ["unattached", "delete", "unused"]
+        }
+      ]
+    }
+  },
+  {
+    "id": "test-005",
+    "description": "Production SQL database with Premium tier but low usage",
+    "resources": [
+      {
+        "name": "proddb",
+        "type": "Microsoft.Sql/servers/databases",
+        "properties": {
+          "edition": "Premium",
+          "serviceLevelObjective": "P2"
+        },
+        "tags": {
+          "environment": "production"
+        }
+      }
+    ],
+    "expectedFindings": {
+      "cost": [
+        {
+          "category": "Pricing",
+          "keywords": ["tier", "downgrade", "utilization"]
+        }
+      ]
+    }
+  }
+]
