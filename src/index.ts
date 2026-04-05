@@ -8,6 +8,7 @@ import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { MainAgent } from './agent/main-agent.js';
+import { loadFoundryConfig } from './config/foundry.js';
 import { initializeTracing } from './observability/tracing.js';
 import type { AnalysisRequest } from './types/index.js';
 
@@ -23,29 +24,14 @@ async function main() {
   // Initialize observability
   initializeTracing();
 
-  // Get Foundry configuration from environment
-  const apiKey = process.env.FOUNDRY_API_KEY;
-  const baseUrl = process.env.FOUNDRY_BASE_URL;
-  const model = process.env.FOUNDRY_MODEL || 'claude-sonnet-4-5';
-  const apiVersion = process.env.ANTHROPIC_VERSION || '2023-06-01';
+  const foundryConfig = loadFoundryConfig();
 
-  if (!apiKey || !baseUrl) {
-    throw new Error(
-      'FOUNDRY_API_KEY and FOUNDRY_BASE_URL environment variables are required (e.g., https://<resource>.services.ai.azure.com/anthropic/v1)'
-    );
-  }
-
-  // Normalize Foundry base URL to include /v1 suffix expected by Microsoft Foundry
-  const normalizedBaseUrl = baseUrl.endsWith('/v1')
-    ? baseUrl
-    : `${baseUrl.replace(/\/$/, '')}/v1`;
-
-  console.log(`Model: ${model}`);
-  console.log(`Base URL: ${normalizedBaseUrl}`);
-  console.log(`Anthropic API Version: ${apiVersion}\n`);
+  console.log(`Model: ${foundryConfig.model}`);
+  console.log(`Foundry Target: ${foundryConfig.displayTarget}`);
+  console.log(`Auth Method: ${foundryConfig.authMethod}\n`);
 
   // Create main agent with Claude Agent SDK
-  const agent = new MainAgent(apiKey, normalizedBaseUrl, model);
+  const agent = new MainAgent(foundryConfig);
 
   // Load sample Azure resource export
   const examplePath = join(__dirname, '../examples/sample-azure-export.json');

@@ -7,6 +7,7 @@ import { query, createSdkMcpServer, type Options } from '@anthropic-ai/claude-ag
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import type { FoundryConfig } from '../config/foundry.js';
 import type { AnalysisRequest, AnalysisReport, AzureResource } from '../types/index.js';
 import { azureWafSkills } from '../skills/azure-waf.js';
 import { withTracing, recordEvent, recordAttribute } from '../observability/tracing.js';
@@ -19,17 +20,11 @@ const __dirname = dirname(__filename);
  * Main Agent for Azure Resource Analysis
  */
 export class MainAgent {
-  private apiKey: string;
-  private baseUrl: string;
   private model: string;
-  private apiVersion: string;
   private agentOptions: Options;
 
-  constructor(apiKey: string, baseUrl: string, model: string) {
-    this.apiKey = apiKey;
-    this.baseUrl = baseUrl;
-    this.model = model;
-    this.apiVersion = process.env.ANTHROPIC_VERSION || '2023-06-01';
+  constructor(foundryConfig: FoundryConfig) {
+    this.model = foundryConfig.model;
 
     // Load agent instructions
     const claudePath = join(__dirname, '../../.claude/CLAUDE.md');
@@ -53,15 +48,7 @@ export class MainAgent {
       mcpServers: {
         'azure-waf': wafSkillServer,
       },
-      env: {
-        // Microsoft Foundry configuration
-        FOUNDRY_API_KEY: this.apiKey,
-        FOUNDRY_BASE_URL: this.baseUrl,
-        // Claude Agent SDK / Anthropic client configuration
-        ANTHROPIC_API_KEY: this.apiKey,
-        ANTHROPIC_API_URL: this.baseUrl,
-        ANTHROPIC_VERSION: this.apiVersion,
-      },
+      env: foundryConfig.env,
       agents: {
         // Security Analyzer Subagent
         'security-analyzer': {

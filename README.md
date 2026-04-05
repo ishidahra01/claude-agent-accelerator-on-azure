@@ -178,7 +178,7 @@ Azure Container Apps offers:
 
 3. **Foundry Setup**:
    - Get Foundry API key or configure Entra ID auth
-   - Note your Foundry base URL: `https://<resource-name>.services.ai.azure.com/anthropic/v1`
+  - Note your Foundry resource name or base URL: `https://<resource-name>.services.ai.azure.com/anthropic`
 
 ### Local Development
 
@@ -197,11 +197,13 @@ Azure Container Apps offers:
 
    Required variables:
    ```env
-   FOUNDRY_API_KEY=your_foundry_api_key_here
-   FOUNDRY_BASE_URL=https://your-resource-name.services.ai.azure.com/anthropic/v1
-   FOUNDRY_MODEL=claude-sonnet-4-5
-   ANTHROPIC_VERSION=2023-06-01
+  CLAUDE_CODE_USE_FOUNDRY=1
+  ANTHROPIC_FOUNDRY_API_KEY=your_foundry_api_key_here
+  ANTHROPIC_FOUNDRY_RESOURCE=your-resource-name
+  ANTHROPIC_DEFAULT_SONNET_MODEL=claude-sonnet-4-6
    ```
+
+  API キーを使わない場合は `ANTHROPIC_FOUNDRY_API_KEY` を外し、`az login` などで Microsoft Entra ID 認証を使います。
 
 3. **Run the Agent**:
    ```bash
@@ -221,8 +223,9 @@ Azure Container Apps offers:
    ```bash
    chmod +x infrastructure/deploy-aca.sh
 
-   export FOUNDRY_API_KEY="your_key"
-   export FOUNDRY_BASE_URL="https://your-resource.services.ai.azure.com/anthropic/v1"
+  export CLAUDE_CODE_USE_FOUNDRY="1"
+  export ANTHROPIC_FOUNDRY_API_KEY="your_key"
+  export ANTHROPIC_FOUNDRY_RESOURCE="your-resource"
 
    ./infrastructure/deploy-aca.sh
    ```
@@ -234,7 +237,7 @@ Azure Container Apps offers:
      --template-file infrastructure/bicep/main.bicep \
      --parameters \
        foundryApiKey="your_key" \
-       foundryBaseUrl="https://your-resource.services.ai.azure.com/anthropic/v1"
+      foundryBaseUrl="https://your-resource.services.ai.azure.com/anthropic"
    ```
 
 3. **Access Logs**:
