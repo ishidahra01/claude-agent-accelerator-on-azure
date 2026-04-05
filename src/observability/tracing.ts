@@ -2,11 +2,7 @@
  * OpenTelemetry tracing integration for Azure Application Insights
  */
 
-import { trace, context, SpanStatusCode } from '@opentelemetry/api';
-import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
-import { Resource } from '@opentelemetry/resources';
-import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
-import { SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
+import { trace, SpanStatusCode } from '@opentelemetry/api';
 import { useAzureMonitor } from '@azure/monitor-opentelemetry';
 
 let tracingInitialized = false;

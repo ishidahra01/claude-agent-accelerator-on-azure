@@ -70,11 +70,11 @@ This repository showcases Claude Agent SDK's unique capabilities through a real-
 
 #### 3. **Automatic Compaction for Large Data**
 - ✅ SDK automatically compacts large tool outputs
-- ✅ Process 100+ Azure resources without context overflow
-- ✅ Maintains reasoning quality despite large inputs
+- ✅ Process 225 Azure resources without context overflow
+- ✅ Maintains reasoning quality despite large inputs (265KB JSON)
 - ❌ *Without SDK*: Would manually truncate or chunk data, losing information
 
-**See it in action**: Try `examples/large-azure-export.json` (25 resources)
+**See it in action**: Try `examples/large-azure-export.json` (225 resources, 265KB)
 
 #### 4. **Skills for Progressive Context Loading**
 - ✅ Azure Well-Architected Framework loaded only when needed
@@ -367,22 +367,23 @@ Analyzes `examples/sample-azure-export.json` (5 resources)
 ```bash
 npm run scenario:2
 ```
-Analyzes `examples/large-azure-export.json` (25 resources)
+Analyzes `examples/large-azure-export.json` (225 resources, 265KB)
 - **Demonstrates**: Automatic compaction, context isolation, large data handling
 - **SDK Benefit**: Processes 100KB+ data without context overflow
 - **Runtime**: ~60 seconds
 
-### Scenario 3: Deep Research Mode (Built-in Tools)
+### Scenario 3: Analysis Procedure Explanation (Multi-step Reasoning)
 ```bash
 npm run scenario:3
 ```
-When running, the Explore Agent automatically:
-1. Uses **Read** tool to parse resource files
-2. Uses **WebSearch** to find latest Azure best practices
-3. Uses **Bash** for JSON parsing (if needed)
+The agent explains its analysis procedure step-by-step before executing:
+1. Outlines exploration approach
+2. Describes delegation strategy
+3. Explains expected workflow
+4. Then performs the analysis
 
-- **Demonstrates**: Zero-implementation built-in tools
-- **SDK Benefit**: No custom tool handler code required
+- **Demonstrates**: Multi-step reasoning, transparency, built-in tools
+- **SDK Benefit**: Clear visibility into agent decision-making process
 
 ### Scenario 4: Progressive Knowledge Loading (Skills)
 ```bash

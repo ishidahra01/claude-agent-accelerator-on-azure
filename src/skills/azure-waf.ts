@@ -166,7 +166,7 @@ export const analyzeResourceTool = tool(
     pillar: z.enum(['security', 'cost', 'reliability', 'performance', 'operational', 'all']),
   },
   async ({ resourceType, resourceConfig, pillar }) => {
-    let findings: string[] = [];
+    const findings: string[] = [];
 
     try {
       const config = JSON.parse(resourceConfig);

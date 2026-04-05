@@ -49,6 +49,11 @@ export class MainAgent {
       systemPrompt: claudeMd,
       mcpServers: {
         'azure-waf': wafSkillServer,
+        // MS Learn Doc MCP server for latest Azure documentation
+        'ms-learn-docs': {
+          command: 'npx',
+          args: ['-y', '@microsoft/mcp-server-docs'],
+        },
       },
       env: foundryConfig.env,
       agents: {

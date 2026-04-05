@@ -21,9 +21,10 @@ This enhancement transforms the Azure Resource Analysis sample into a **Claude A
 **File**: `examples/large-azure-export.json`
 
 **Purpose**: Triggers SDK's automatic compaction
-- 25 Azure resources (5x original)
-- ~50KB JSON file
+- 225 Azure resources (45x original)
+- ~265KB JSON file
 - Multiple regions and resource types
+- Various misconfigurations for realistic analysis
 
 **Benefit**: Demonstrates SDK handles large data without manual chunking
 
