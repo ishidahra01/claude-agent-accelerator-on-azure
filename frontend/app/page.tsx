@@ -33,13 +33,19 @@ export default function Home() {
     }]);
   };
 
-  const updateLastMessage = (content: string) => {
+  const appendToLastAssistant = (content: string) => {
     setMessages(prev => {
-      const newMessages = [...prev];
-      if (newMessages.length > 0) {
-        newMessages[newMessages.length - 1].content += content;
+      const next = [...prev];
+      for (let i = next.length - 1; i >= 0; i -= 1) {
+        if (next[i].type === 'assistant') {
+          next[i] = {
+            ...next[i],
+            content: next[i].content + content,
+          };
+          break;
+        }
       }
-      return newMessages;
+      return next;
     });
   };
 
@@ -123,7 +129,7 @@ export default function Home() {
                 toolName: event.toolName,
               });
             } else if (event.type === 'text') {
-              updateLastMessage(event.text);
+              appendToLastAssistant(event.text);
             } else if (event.type === 'report') {
               // Add formatted report
               addMessage({

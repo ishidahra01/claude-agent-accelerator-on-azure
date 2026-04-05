@@ -99,4 +99,5 @@ export type StreamEvent =
   | { type: 'text'; text: string; timestamp: string }
   | { type: 'usage'; inputTokens: number; outputTokens: number; timestamp: string }
   | { type: 'report'; report: AnalysisReport; timestamp: string }
-  | { type: 'error'; error: string; timestamp: string };
+  | { type: 'error'; error: string; timestamp: string }
+  | { type: 'done'; timestamp: string };

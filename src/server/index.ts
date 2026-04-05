@@ -115,7 +115,10 @@ fastify.post<{
     );
 
     // Send completion event
-    reply.raw.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+    reply.raw.write(`data: ${JSON.stringify({
+      type: 'done',
+      timestamp: new Date().toISOString(),
+    })}\n\n`);
     reply.raw.end();
   } catch (error) {
     fastify.log.error({ err: error }, 'Streaming analysis error');
@@ -124,6 +127,7 @@ fastify.post<{
     reply.raw.write(`data: ${JSON.stringify({
       type: 'error',
       error: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString(),
     })}\n\n`);
     reply.raw.end();
   }
