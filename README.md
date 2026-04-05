@@ -27,6 +27,14 @@ The Azure Resource Analysis Agent analyzes Azure infrastructure configurations a
 3. Synthesizes findings into a prioritized, actionable report
 4. Provides specific Azure CLI commands and configuration changes
 
+## Project Structure
+
+- `src/` — Backend Fastify API and Claude Agent SDK logic
+- `frontend/` — Next.js chat UI (runs separately on port 4000)
+- `docs/` — Architecture notes and API/UI event flow
+- `examples/` — Sample Azure resource exports for testing
+- `Dockerfile` — Backend container image (API server on port 3000)
+
 ---
 
 ## Why Claude Agent SDK?
