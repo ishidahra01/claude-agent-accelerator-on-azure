@@ -8,6 +8,11 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
+    "scenario": "tsx src/scenarios.ts",
+    "scenario:1": "tsx src/scenarios.ts 1",
+    "scenario:2": "tsx src/scenarios.ts 2",
+    "scenario:3": "tsx src/scenarios.ts 3",
+    "scenario:4": "tsx src/scenarios.ts 4",
     "lint": "eslint src --ext .ts",
     "test": "echo \"Tests to be added\" && exit 0"
   },

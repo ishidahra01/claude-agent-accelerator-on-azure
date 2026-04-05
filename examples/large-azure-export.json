@@ -1,0 +1,544 @@
+{
+  "resources": [
+    {
+      "id": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Storage/storageAccounts/proddata001-region-1",
+      "name": "proddata001-region-1",
+      "type": "Microsoft.Storage/storageAccounts",
+      "location": "eastus",
+      "properties": {
+        "allowBlobPublicAccess": true,
+        "networkAcls": {
+          "defaultAction": "Allow"
+        },
+        "encryption": {
+          "services": {
+            "blob": {
+              "enabled": true
+            }
+          }
+        },
+        "minimumTlsVersion": "TLS1_0"
+      },
+      "tags": {
+        "environment": "production",
+        "criticality": "high"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/dev-rg/providers/Microsoft.Compute/virtualMachines/dev-webserver-01-region-1",
+      "name": "dev-webserver-01-region-1",
+      "type": "Microsoft.Compute/virtualMachines",
+      "location": "eastus",
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "Standard_B2s"
+        },
+        "storageProfile": {
+          "osDisk": {
+            "diskSizeGB": 128,
+            "managedDisk": {
+              "storageAccountType": "Premium_LRS"
+            }
+          }
+        },
+        "osProfile": {
+          "adminUsername": "azureuser"
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "/subscriptions/12345/resourceGroups/dev-rg/providers/Microsoft.Network/networkInterfaces/dev-webserver-01-nic"
+            }
+          ]
+        }
+      },
+      "tags": {
+        "environment": "development",
+        "owner": "dev-team"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Web/sites/production-api-region-1",
+      "name": "production-api-region-1",
+      "type": "Microsoft.Web/sites",
+      "location": "eastus",
+      "properties": {
+        "state": "Running",
+        "serverFarmId": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Web/serverfarms/premium-plan",
+        "httpsOnly": false,
+        "siteConfig": {
+          "minTlsVersion": "1.0",
+          "ftpsState": "AllAllowed"
+        }
+      },
+      "tags": {
+        "environment": "production"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Sql/servers/prodsqlserver/databases/proddb-region-1",
+      "name": "proddb-region-1",
+      "type": "Microsoft.Sql/servers/databases",
+      "location": "eastus",
+      "properties": {
+        "edition": "Premium",
+        "serviceLevelObjective": "P2",
+        "transparentDataEncryption": {
+          "status": "Enabled"
+        },
+        "maxSizeBytes": 268435456000
+      },
+      "tags": {
+        "environment": "production"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/dev-rg/providers/Microsoft.Compute/disks/dev-unattached-disk-01-region-1",
+      "name": "dev-unattached-disk-01-region-1",
+      "type": "Microsoft.Compute/disks",
+      "location": "eastus",
+      "properties": {
+        "diskSizeGB": 128,
+        "diskState": "Unattached",
+        "sku": {
+          "name": "Premium_LRS"
+        }
+      },
+      "tags": {
+        "environment": "development"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Storage/storageAccounts/proddata001-region-2",
+      "name": "proddata001-region-2",
+      "type": "Microsoft.Storage/storageAccounts",
+      "location": "westus",
+      "properties": {
+        "allowBlobPublicAccess": true,
+        "networkAcls": {
+          "defaultAction": "Allow"
+        },
+        "encryption": {
+          "services": {
+            "blob": {
+              "enabled": true
+            }
+          }
+        },
+        "minimumTlsVersion": "TLS1_0"
+      },
+      "tags": {
+        "environment": "production",
+        "criticality": "high"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/dev-rg/providers/Microsoft.Compute/virtualMachines/dev-webserver-01-region-2",
+      "name": "dev-webserver-01-region-2",
+      "type": "Microsoft.Compute/virtualMachines",
+      "location": "westus",
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "Standard_B2s"
+        },
+        "storageProfile": {
+          "osDisk": {
+            "diskSizeGB": 128,
+            "managedDisk": {
+              "storageAccountType": "Premium_LRS"
+            }
+          }
+        },
+        "osProfile": {
+          "adminUsername": "azureuser"
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "/subscriptions/12345/resourceGroups/dev-rg/providers/Microsoft.Network/networkInterfaces/dev-webserver-01-nic"
+            }
+          ]
+        }
+      },
+      "tags": {
+        "environment": "development",
+        "owner": "dev-team"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Web/sites/production-api-region-2",
+      "name": "production-api-region-2",
+      "type": "Microsoft.Web/sites",
+      "location": "westus",
+      "properties": {
+        "state": "Running",
+        "serverFarmId": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Web/serverfarms/premium-plan",
+        "httpsOnly": false,
+        "siteConfig": {
+          "minTlsVersion": "1.0",
+          "ftpsState": "AllAllowed"
+        }
+      },
+      "tags": {
+        "environment": "production"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Sql/servers/prodsqlserver/databases/proddb-region-2",
+      "name": "proddb-region-2",
+      "type": "Microsoft.Sql/servers/databases",
+      "location": "westus",
+      "properties": {
+        "edition": "Premium",
+        "serviceLevelObjective": "P2",
+        "transparentDataEncryption": {
+          "status": "Enabled"
+        },
+        "maxSizeBytes": 268435456000
+      },
+      "tags": {
+        "environment": "production"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/dev-rg/providers/Microsoft.Compute/disks/dev-unattached-disk-01-region-2",
+      "name": "dev-unattached-disk-01-region-2",
+      "type": "Microsoft.Compute/disks",
+      "location": "westus",
+      "properties": {
+        "diskSizeGB": 128,
+        "diskState": "Unattached",
+        "sku": {
+          "name": "Premium_LRS"
+        }
+      },
+      "tags": {
+        "environment": "development"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Storage/storageAccounts/proddata001-region-3",
+      "name": "proddata001-region-3",
+      "type": "Microsoft.Storage/storageAccounts",
+      "location": "northeurope",
+      "properties": {
+        "allowBlobPublicAccess": true,
+        "networkAcls": {
+          "defaultAction": "Allow"
+        },
+        "encryption": {
+          "services": {
+            "blob": {
+              "enabled": true
+            }
+          }
+        },
+        "minimumTlsVersion": "TLS1_0"
+      },
+      "tags": {
+        "environment": "production",
+        "criticality": "high"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/dev-rg/providers/Microsoft.Compute/virtualMachines/dev-webserver-01-region-3",
+      "name": "dev-webserver-01-region-3",
+      "type": "Microsoft.Compute/virtualMachines",
+      "location": "northeurope",
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "Standard_B2s"
+        },
+        "storageProfile": {
+          "osDisk": {
+            "diskSizeGB": 128,
+            "managedDisk": {
+              "storageAccountType": "Premium_LRS"
+            }
+          }
+        },
+        "osProfile": {
+          "adminUsername": "azureuser"
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "/subscriptions/12345/resourceGroups/dev-rg/providers/Microsoft.Network/networkInterfaces/dev-webserver-01-nic"
+            }
+          ]
+        }
+      },
+      "tags": {
+        "environment": "development",
+        "owner": "dev-team"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Web/sites/production-api-region-3",
+      "name": "production-api-region-3",
+      "type": "Microsoft.Web/sites",
+      "location": "northeurope",
+      "properties": {
+        "state": "Running",
+        "serverFarmId": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Web/serverfarms/premium-plan",
+        "httpsOnly": false,
+        "siteConfig": {
+          "minTlsVersion": "1.0",
+          "ftpsState": "AllAllowed"
+        }
+      },
+      "tags": {
+        "environment": "production"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Sql/servers/prodsqlserver/databases/proddb-region-3",
+      "name": "proddb-region-3",
+      "type": "Microsoft.Sql/servers/databases",
+      "location": "northeurope",
+      "properties": {
+        "edition": "Premium",
+        "serviceLevelObjective": "P2",
+        "transparentDataEncryption": {
+          "status": "Enabled"
+        },
+        "maxSizeBytes": 268435456000
+      },
+      "tags": {
+        "environment": "production"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/dev-rg/providers/Microsoft.Compute/disks/dev-unattached-disk-01-region-3",
+      "name": "dev-unattached-disk-01-region-3",
+      "type": "Microsoft.Compute/disks",
+      "location": "northeurope",
+      "properties": {
+        "diskSizeGB": 128,
+        "diskState": "Unattached",
+        "sku": {
+          "name": "Premium_LRS"
+        }
+      },
+      "tags": {
+        "environment": "development"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Storage/storageAccounts/proddata001-region-4",
+      "name": "proddata001-region-4",
+      "type": "Microsoft.Storage/storageAccounts",
+      "location": "southeastasia",
+      "properties": {
+        "allowBlobPublicAccess": true,
+        "networkAcls": {
+          "defaultAction": "Allow"
+        },
+        "encryption": {
+          "services": {
+            "blob": {
+              "enabled": true
+            }
+          }
+        },
+        "minimumTlsVersion": "TLS1_0"
+      },
+      "tags": {
+        "environment": "production",
+        "criticality": "high"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/dev-rg/providers/Microsoft.Compute/virtualMachines/dev-webserver-01-region-4",
+      "name": "dev-webserver-01-region-4",
+      "type": "Microsoft.Compute/virtualMachines",
+      "location": "southeastasia",
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "Standard_B2s"
+        },
+        "storageProfile": {
+          "osDisk": {
+            "diskSizeGB": 128,
+            "managedDisk": {
+              "storageAccountType": "Premium_LRS"
+            }
+          }
+        },
+        "osProfile": {
+          "adminUsername": "azureuser"
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "/subscriptions/12345/resourceGroups/dev-rg/providers/Microsoft.Network/networkInterfaces/dev-webserver-01-nic"
+            }
+          ]
+        }
+      },
+      "tags": {
+        "environment": "development",
+        "owner": "dev-team"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Web/sites/production-api-region-4",
+      "name": "production-api-region-4",
+      "type": "Microsoft.Web/sites",
+      "location": "southeastasia",
+      "properties": {
+        "state": "Running",
+        "serverFarmId": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Web/serverfarms/premium-plan",
+        "httpsOnly": false,
+        "siteConfig": {
+          "minTlsVersion": "1.0",
+          "ftpsState": "AllAllowed"
+        }
+      },
+      "tags": {
+        "environment": "production"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Sql/servers/prodsqlserver/databases/proddb-region-4",
+      "name": "proddb-region-4",
+      "type": "Microsoft.Sql/servers/databases",
+      "location": "southeastasia",
+      "properties": {
+        "edition": "Premium",
+        "serviceLevelObjective": "P2",
+        "transparentDataEncryption": {
+          "status": "Enabled"
+        },
+        "maxSizeBytes": 268435456000
+      },
+      "tags": {
+        "environment": "production"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/dev-rg/providers/Microsoft.Compute/disks/dev-unattached-disk-01-region-4",
+      "name": "dev-unattached-disk-01-region-4",
+      "type": "Microsoft.Compute/disks",
+      "location": "southeastasia",
+      "properties": {
+        "diskSizeGB": 128,
+        "diskState": "Unattached",
+        "sku": {
+          "name": "Premium_LRS"
+        }
+      },
+      "tags": {
+        "environment": "development"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Storage/storageAccounts/proddata001-region-5",
+      "name": "proddata001-region-5",
+      "type": "Microsoft.Storage/storageAccounts",
+      "location": "australiaeast",
+      "properties": {
+        "allowBlobPublicAccess": true,
+        "networkAcls": {
+          "defaultAction": "Allow"
+        },
+        "encryption": {
+          "services": {
+            "blob": {
+              "enabled": true
+            }
+          }
+        },
+        "minimumTlsVersion": "TLS1_0"
+      },
+      "tags": {
+        "environment": "production",
+        "criticality": "high"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/dev-rg/providers/Microsoft.Compute/virtualMachines/dev-webserver-01-region-5",
+      "name": "dev-webserver-01-region-5",
+      "type": "Microsoft.Compute/virtualMachines",
+      "location": "australiaeast",
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "Standard_B2s"
+        },
+        "storageProfile": {
+          "osDisk": {
+            "diskSizeGB": 128,
+            "managedDisk": {
+              "storageAccountType": "Premium_LRS"
+            }
+          }
+        },
+        "osProfile": {
+          "adminUsername": "azureuser"
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "/subscriptions/12345/resourceGroups/dev-rg/providers/Microsoft.Network/networkInterfaces/dev-webserver-01-nic"
+            }
+          ]
+        }
+      },
+      "tags": {
+        "environment": "development",
+        "owner": "dev-team"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Web/sites/production-api-region-5",
+      "name": "production-api-region-5",
+      "type": "Microsoft.Web/sites",
+      "location": "australiaeast",
+      "properties": {
+        "state": "Running",
+        "serverFarmId": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Web/serverfarms/premium-plan",
+        "httpsOnly": false,
+        "siteConfig": {
+          "minTlsVersion": "1.0",
+          "ftpsState": "AllAllowed"
+        }
+      },
+      "tags": {
+        "environment": "production"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Sql/servers/prodsqlserver/databases/proddb-region-5",
+      "name": "proddb-region-5",
+      "type": "Microsoft.Sql/servers/databases",
+      "location": "australiaeast",
+      "properties": {
+        "edition": "Premium",
+        "serviceLevelObjective": "P2",
+        "transparentDataEncryption": {
+          "status": "Enabled"
+        },
+        "maxSizeBytes": 268435456000
+      },
+      "tags": {
+        "environment": "production"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/dev-rg/providers/Microsoft.Compute/disks/dev-unattached-disk-01-region-5",
+      "name": "dev-unattached-disk-01-region-5",
+      "type": "Microsoft.Compute/disks",
+      "location": "australiaeast",
+      "properties": {
+        "diskSizeGB": 128,
+        "diskState": "Unattached",
+        "sku": {
+          "name": "Premium_LRS"
+        }
+      },
+      "tags": {
+        "environment": "development"
+      }
+    }
+  ]
+}
