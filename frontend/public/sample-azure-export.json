@@ -1,0 +1,112 @@
+{
+  "resources": [
+    {
+      "id": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Storage/storageAccounts/proddata001",
+      "name": "proddata001",
+      "type": "Microsoft.Storage/storageAccounts",
+      "location": "eastus",
+      "properties": {
+        "allowBlobPublicAccess": true,
+        "networkAcls": {
+          "defaultAction": "Allow"
+        },
+        "encryption": {
+          "services": {
+            "blob": {
+              "enabled": true
+            }
+          }
+        },
+        "minimumTlsVersion": "TLS1_0"
+      },
+      "tags": {
+        "environment": "production",
+        "criticality": "high"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/dev-rg/providers/Microsoft.Compute/virtualMachines/dev-webserver-01",
+      "name": "dev-webserver-01",
+      "type": "Microsoft.Compute/virtualMachines",
+      "location": "eastus",
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "Standard_B2s"
+        },
+        "storageProfile": {
+          "osDisk": {
+            "diskSizeGB": 128,
+            "managedDisk": {
+              "storageAccountType": "Premium_LRS"
+            }
+          }
+        },
+        "osProfile": {
+          "adminUsername": "azureuser"
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "/subscriptions/12345/resourceGroups/dev-rg/providers/Microsoft.Network/networkInterfaces/dev-webserver-01-nic"
+            }
+          ]
+        }
+      },
+      "tags": {
+        "environment": "development",
+        "owner": "dev-team"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Web/sites/production-api",
+      "name": "production-api",
+      "type": "Microsoft.Web/sites",
+      "location": "eastus",
+      "properties": {
+        "state": "Running",
+        "serverFarmId": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Web/serverfarms/premium-plan",
+        "httpsOnly": false,
+        "siteConfig": {
+          "minTlsVersion": "1.0",
+          "ftpsState": "AllAllowed"
+        }
+      },
+      "tags": {
+        "environment": "production"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/production-rg/providers/Microsoft.Sql/servers/prodsqlserver/databases/proddb",
+      "name": "proddb",
+      "type": "Microsoft.Sql/servers/databases",
+      "location": "eastus",
+      "properties": {
+        "edition": "Premium",
+        "serviceLevelObjective": "P2",
+        "transparentDataEncryption": {
+          "status": "Enabled"
+        },
+        "maxSizeBytes": 268435456000
+      },
+      "tags": {
+        "environment": "production"
+      }
+    },
+    {
+      "id": "/subscriptions/12345/resourceGroups/dev-rg/providers/Microsoft.Compute/disks/dev-unattached-disk-01",
+      "name": "dev-unattached-disk-01",
+      "type": "Microsoft.Compute/disks",
+      "location": "eastus",
+      "properties": {
+        "diskSizeGB": 128,
+        "diskState": "Unattached",
+        "sku": {
+          "name": "Premium_LRS"
+        }
+      },
+      "tags": {
+        "environment": "development"
+      }
+    }
+  ]
+}
