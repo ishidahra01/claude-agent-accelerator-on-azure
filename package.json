@@ -1,0 +1,45 @@
+{
+  "name": "claude-agent-accelerator-on-azure",
+  "version": "1.0.0",
+  "description": "Claude Agent SDK sample running on Azure with Microsoft Foundry",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "lint": "eslint src --ext .ts",
+    "test": "echo \"Tests to be added\" && exit 0"
+  },
+  "keywords": [
+    "claude",
+    "agent-sdk",
+    "azure",
+    "microsoft-foundry",
+    "ai-agents"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.92",
+    "@azure/monitor-opentelemetry": "^1.7.0",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/sdk-trace-node": "^1.26.0",
+    "@opentelemetry/sdk-trace-base": "^1.26.0",
+    "@opentelemetry/resources": "^1.26.0",
+    "@opentelemetry/semantic-conventions": "^1.27.0",
+    "dotenv": "^16.4.5",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@typescript-eslint/eslint-plugin": "^7.13.0",
+    "@typescript-eslint/parser": "^7.13.0",
+    "eslint": "^8.57.0",
+    "tsx": "^4.15.0",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
