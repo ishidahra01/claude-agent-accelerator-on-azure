@@ -28,10 +28,12 @@ export class MainAgent {
 
     // Load agent instructions
     const claudePath = join(__dirname, '../../.claude/CLAUDE.md');
+    const explorePath = join(__dirname, '../../.claude/agents/explore-agent.md');
     const securityPath = join(__dirname, '../../.claude/agents/security-analyzer.md');
     const costPath = join(__dirname, '../../.claude/agents/cost-optimizer.md');
 
     const claudeMd = readFileSync(claudePath, 'utf-8');
+    const exploreAgentMd = readFileSync(explorePath, 'utf-8');
     const securityAnalyzerMd = readFileSync(securityPath, 'utf-8');
     const costOptimizerMd = readFileSync(costPath, 'utf-8');
 
@@ -47,9 +49,19 @@ export class MainAgent {
       systemPrompt: claudeMd,
       mcpServers: {
         'azure-waf': wafSkillServer,
+        // MS Learn Doc MCP server for latest Azure documentation
+        'ms-learn-docs': {
+          command: 'npx',
+          args: ['-y', '@microsoft/mcp-server-docs'],
+        },
       },
       env: foundryConfig.env,
       agents: {
+        // Explore Agent (demonstrates context isolation)
+        'explore-agent': {
+          description: 'Explores and researches Azure resources with isolated context (demonstrates SDK context management)',
+          prompt: exploreAgentMd,
+        },
         // Security Analyzer Subagent
         'security-analyzer': {
           description: 'Performs deep security analysis of Azure resources',
@@ -79,8 +91,12 @@ export class MainAgent {
       const resourcesSummary = this.summarizeResources(request.resources);
 
       // Build analysis prompt based on scope
-      let analysisPrompt = `You are analyzing Azure infrastructure resources. `;
-      analysisPrompt += `You have access to the Azure Well-Architected Framework through your skills.\n\n`;
+      let analysisPrompt = `You are analyzing Azure infrastructure resources using Claude Agent SDK capabilities.\n\n`;
+      analysisPrompt += `IMPORTANT: First, delegate to 'explore-agent' subagent to:\n`;
+      analysisPrompt += `1. Read and parse the resource configurations\n`;
+      analysisPrompt += `2. Search for latest Azure best practices (use WebSearch)\n`;
+      analysisPrompt += `3. Return a concise exploration summary\n\n`;
+      analysisPrompt += `This demonstrates SDK's context isolation - the explore agent processes large data without polluting your context.\n\n`;
       analysisPrompt += `Resources to analyze:\n${resourcesSummary}\n\n`;
 
       if (request.scope === 'security' || !request.scope || request.scope === 'all') {
