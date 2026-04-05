@@ -484,39 +484,75 @@ src/
 
 .claude/
 ├── CLAUDE.md                  # Main agent instructions
+├── skills/
+│   └── azure-well-architected/
+│       └── SKILL.md           # WAF knowledge (progressive loading)
 └── agents/
+    ├── explore-agent.md       # Exploration & research (context isolation)
     ├── security-analyzer.md   # Security subagent instructions
     └── cost-optimizer.md      # Cost subagent instructions
+
+docs/
+└── sdk-capabilities.md        # Deep dive on SDK features demonstrated
 ```
 
 ### How It Works
 
-**1. Main Agent Setup** (`src/agent/main-agent.ts`):
+**1. Main Agent Setup with MCP** (`src/agent/main-agent.ts`):
 ```typescript
-import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
+import { query, createSdkMcpServer, type Options } from '@anthropic-ai/claude-agent-sdk';
 import { azureWafSkills } from '../skills/azure-waf.js';
 
-// Configure agent with skills and subagents
+// Register Azure WAF skills as in-process MCP server
+const wafSkillServer = createSdkMcpServer({
+  name: 'azure-waf',
+  tools: azureWafSkills,
+});
+
+// Configure agent with MCP servers and subagents
 const agentOptions: Options = {
-  apiKey: foundryApiKey,
-  baseURL: foundryBaseUrl,
   model: 'claude-sonnet-4-5',
-  systemPrompt: claudeMd,          // From .claude/CLAUDE.md
-  tools: azureWafSkills,            // Custom WAF tools
+  systemPrompt: claudeMd,
+  mcpServers: {
+    'azure-waf': wafSkillServer,  // In-process MCP
+    // Ready for external MCP servers:
+    // 'ms-learn-docs': msLearnMcpServer,
+  },
   agents: {
-    'security-analyzer': {
-      systemPrompt: securityAnalyzerMd,
-      tools: azureWafSkills,
+    'explore-agent': {
+      description: 'Explores Azure resources with isolated context',
+      prompt: exploreAgentMd,
     },
-    'cost-optimizer': {
-      systemPrompt: costOptimizerMd,
-      tools: azureWafSkills,
-    },
+    'security-analyzer': { ... },
+    'cost-optimizer': { ... },
   },
 };
 ```
 
-**2. Custom Skills** (`src/skills/azure-waf.ts`):
+**2. MCP Integration Pattern**:
+
+Skills are registered as MCP servers using SDK's `createSdkMcpServer()`:
+```typescript
+// In-process MCP server (this sample)
+const wafSkillServer = createSdkMcpServer({
+  name: 'azure-waf',
+  tools: azureWafSkills,
+});
+
+// External MCP server (future enhancement)
+const msLearnMcpServer = {
+  command: 'npx',
+  args: ['-y', '@microsoft/mcp-server-docs'],
+};
+```
+
+**Benefits**:
+- Progressive loading: Skills loaded only when needed
+- Modular: Easy to add/remove knowledge sources
+- Zero coupling: Skills don't depend on agent logic
+- Reusable: Same skills across multiple agents
+
+**3. Skills Implementation** (`src/skills/azure-waf.ts`):
 ```typescript
 import { tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
@@ -535,7 +571,7 @@ export const getWafGuidanceTool = tool(
 );
 ```
 
-**3. Agent Execution** (`src/agent/main-agent.ts`):
+**4. Agent Execution** (`src/agent/main-agent.ts`):
 ```typescript
 const iterator = query({
   prompt: analysisPrompt,
@@ -556,6 +592,7 @@ for await (const msg of iterator) {
 
 ## Documentation
 
+- **[SDK Capabilities Deep Dive](docs/sdk-capabilities.md)**: Detailed explanation of how this sample demonstrates Claude Agent SDK features
 - **[Architecture Decision Record](docs/ADR-001-system-architecture.md)**: System design and component responsibilities
 - **[Demo Guide](docs/demo-guide.md)**: Step-by-step walkthrough
 - **[Positioning](docs/positioning.md)**: Why Claude? Why Azure? Customer value propositions
@@ -575,12 +612,25 @@ for await (const msg of iterator) {
 
 ### Future Enhancements
 
+- [ ] MS Learn Doc MCP server integration for latest Azure documentation
 - [ ] Managed Identity authentication (eliminate API keys)
 - [ ] Live Azure subscription analysis via Azure Resource Graph API
 - [ ] Web UI for interactive analysis
 - [ ] RAG integration with Azure AI Search for compliance policies
 - [ ] Advanced evaluation dashboards in Azure Workbooks
 - [ ] Multi-subscription batch analysis
+
+**Note**: MS Learn Doc MCP server is ready to integrate. Simply add to `mcpServers` configuration:
+```typescript
+mcpServers: {
+  'azure-waf': wafSkillServer,
+  'ms-learn-docs': {
+    command: 'npx',
+    args: ['-y', '@microsoft/mcp-server-docs'],
+  },
+}
+```
+See: https://github.com/microsoftdocs/mcp
 
 ---
 
