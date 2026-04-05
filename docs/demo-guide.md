@@ -158,12 +158,23 @@ Execute subagents in parallel when possible for faster analysis.
 
 #### Microsoft Foundry Integration
 
-**Show Foundry Client** (`src/models/foundry-client.ts`):
+**Show Foundry Configuration** (`src/agent/main-agent.ts`):
 ```typescript
-this.client = new Anthropic({
-  apiKey: config.apiKey,
-  baseURL: config.baseUrl,  // Azure Foundry endpoint
+const wafSkillServer = createSdkMcpServer({
+  name: 'azure-waf',
+  tools: azureWafSkills,
 });
+
+this.agentOptions = {
+  systemPrompt: claudeMd,
+  model: this.model,
+  mcpServers: { 'azure-waf': wafSkillServer },
+  env: {
+    FOUNDRY_API_KEY: apiKey,
+    FOUNDRY_BASE_URL: `${baseUrl}/v1`,
+    ANTHROPIC_VERSION: '2023-06-01', // required by Microsoft Foundry
+  },
+};
 ```
 
 **Benefits**:
@@ -350,7 +361,7 @@ Successful demo if audience understands:
 ### Agent returns empty findings
 - Check that `examples/sample-azure-export.json` loaded correctly
 - Verify Foundry API key is valid
-- Increase `maxTokens` in `foundry-client.ts` if truncated
+- Confirm `FOUNDRY_BASE_URL` includes `/anthropic/v1` and `ANTHROPIC_VERSION=2023-06-01`
 
 ### Deployment fails
 - Ensure Azure region supports Foundry (East US2, Sweden Central)

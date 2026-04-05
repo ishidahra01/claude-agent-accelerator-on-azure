@@ -14,7 +14,7 @@ This guide provides detailed instructions for deploying the Azure Resource Analy
    - Access to Azure AI Foundry (preview)
    - Claude Sonnet 4.5 deployed in supported region (East US2 or Sweden Central)
    - Foundry API key or Microsoft Entra ID authentication configured
-   - Note your Foundry endpoint: `https://<resource-name>.services.ai.azure.com/anthropic`
+   - Note your Foundry endpoint: `https://<resource-name>.services.ai.azure.com/anthropic/v1`
 
 ### Local Tools
 
@@ -53,8 +53,9 @@ CONTAINER_APP_ENV=claude-agent-env
 
 # Foundry Configuration
 FOUNDRY_API_KEY=your_foundry_api_key_here
-FOUNDRY_BASE_URL=https://your-resource.services.ai.azure.com/anthropic
+FOUNDRY_BASE_URL=https://your-resource.services.ai.azure.com/anthropic/v1
 FOUNDRY_MODEL=claude-sonnet-4-5
+ANTHROPIC_VERSION=2023-06-01
 
 # Optional: Application Insights
 APPLICATIONINSIGHTS_CONNECTION_STRING=
@@ -122,7 +123,7 @@ Create `infrastructure/bicep/parameters.json`:
       "value": "your_api_key_here"
     },
     "foundryBaseUrl": {
-      "value": "https://your-resource.services.ai.azure.com/anthropic"
+      "value": "https://your-resource.services.ai.azure.com/anthropic/v1"
     },
     "foundryModel": {
       "value": "claude-sonnet-4-5"
@@ -268,11 +269,12 @@ az acr build \
 
 3. **Update Code** to use DefaultAzureCredential:
    ```typescript
-   // src/models/foundry-client.ts
+   // src/agent/main-agent.ts
    import { DefaultAzureCredential } from '@azure/identity';
 
    const credential = new DefaultAzureCredential();
    const token = await credential.getToken('https://cognitiveservices.azure.com/.default');
+   // Pass token to Claude Agent SDK environment when Microsoft Foundry supports AAD auth
    ```
 
 ### Set Up Secrets in Key Vault

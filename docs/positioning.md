@@ -367,7 +367,7 @@ export const ANALYSIS_EVALUATION_CRITERIA = [
 - **Lock-In Mitigation**: Code is portable—swap Foundry client for direct Anthropic client with minimal changes
 - **Microsoft Commitment**: Foundry is a strategic Azure offering
 
-**Proof Point**: Show `foundry-client.ts`—abstraction layer makes switching providers straightforward.
+**Proof Point**: Show `src/agent/main-agent.ts`—Claude Agent SDK configured for Microsoft Foundry endpoints and custom skills.
 
 ---
 

@@ -160,17 +160,20 @@ The Azure Resource Analysis Agent is a production-ready implementation of Claude
 
 **Usage**: Referenced by all subagents for best practice validation
 
-### 4. Foundry Client
+### 4. Claude Agent SDK + Foundry Configuration
 
-**Location**: `src/models/foundry-client.ts`
+**Location**: `src/agent/main-agent.ts`
 
 **Responsibilities**:
-- Wrap Anthropic SDK with Foundry-specific configuration
-- Handle Azure-native endpoints (`https://<resource>.services.ai.azure.com/anthropic`)
-- Support both API key and Entra ID authentication
-- Provide streaming and non-streaming message APIs
+- Configure Claude Agent SDK with Microsoft Foundry endpoints (`https://<resource>.services.ai.azure.com/anthropic/v1`)
+- Provide Foundry API key + `anthropic-version` headers to the SDK process via environment variables
+- Register custom Azure WAF skills as an in-process MCP server
+- Expose subagents for security and cost analysis with dedicated prompts
 
-**Design Pattern**: Adapter pattern—swap Foundry for direct Anthropic with minimal code changes
+**Configuration**:
+- `FOUNDRY_API_KEY`: Foundry-issued key (sent as `api-key`)
+- `FOUNDRY_BASE_URL`: Foundry endpoint including `/anthropic/v1`
+- `ANTHROPIC_VERSION`: API version header (e.g., `2023-06-01`)
 
 ### 5. Observability Layer
 

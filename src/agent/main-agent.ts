@@ -3,7 +3,7 @@
  * Orchestrates analysis using Claude Agent SDK with subagents
  */
 
-import { query, type Options } from '@anthropic-ai/claude-agent-sdk';
+import { query, createSdkMcpServer, type Options } from '@anthropic-ai/claude-agent-sdk';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -22,12 +22,14 @@ export class MainAgent {
   private apiKey: string;
   private baseUrl: string;
   private model: string;
+  private apiVersion: string;
   private agentOptions: Options;
 
   constructor(apiKey: string, baseUrl: string, model: string) {
     this.apiKey = apiKey;
     this.baseUrl = baseUrl;
     this.model = model;
+    this.apiVersion = process.env.ANTHROPIC_VERSION || '2023-06-01';
 
     // Load agent instructions
     const claudePath = join(__dirname, '../../.claude/CLAUDE.md');
@@ -38,23 +40,38 @@ export class MainAgent {
     const securityAnalyzerMd = readFileSync(securityPath, 'utf-8');
     const costOptimizerMd = readFileSync(costPath, 'utf-8');
 
+    // Register Azure WAF skills as an in-process MCP server
+    const wafSkillServer = createSdkMcpServer({
+      name: 'azure-waf',
+      tools: azureWafSkills,
+    });
+
     // Configure agent with subagents and skills
     this.agentOptions = {
-      apiKey: this.apiKey,
-      baseURL: this.baseUrl,
       model: this.model,
       systemPrompt: claudeMd,
-      tools: azureWafSkills, // Main agent has access to WAF skills
+      mcpServers: {
+        'azure-waf': wafSkillServer,
+      },
+      env: {
+        // Microsoft Foundry configuration
+        FOUNDRY_API_KEY: this.apiKey,
+        FOUNDRY_BASE_URL: this.baseUrl,
+        // Claude Agent SDK / Anthropic client configuration
+        ANTHROPIC_API_KEY: this.apiKey,
+        ANTHROPIC_API_URL: this.baseUrl,
+        ANTHROPIC_VERSION: this.apiVersion,
+      },
       agents: {
         // Security Analyzer Subagent
         'security-analyzer': {
-          systemPrompt: securityAnalyzerMd,
-          tools: azureWafSkills, // Subagent also has WAF skills
+          description: 'Performs deep security analysis of Azure resources',
+          prompt: securityAnalyzerMd,
         },
         // Cost Optimizer Subagent
         'cost-optimizer': {
-          systemPrompt: costOptimizerMd,
-          tools: azureWafSkills, // Subagent also has WAF skills
+          description: 'Identifies Azure cost optimization opportunities',
+          prompt: costOptimizerMd,
         },
       },
     };
@@ -150,15 +167,6 @@ export class MainAgent {
               'usage.outputTokens': msg.message.usage.output_tokens,
             });
           }
-        }
-
-        // Handle subagent delegation
-        if (msg.type === 'agent_start') {
-          console.log(`\n[Subagent Started: ${msg.agentName || 'unknown'}]`);
-        }
-
-        if (msg.type === 'agent_end') {
-          console.log(`\n[Subagent Completed: ${msg.agentName || 'unknown'}]`);
         }
       }
 

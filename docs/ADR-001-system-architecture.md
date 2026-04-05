@@ -136,8 +136,9 @@ This scenario demonstrates:
 ```
 # Foundry Model Configuration
 FOUNDRY_API_KEY=<api_key>
-FOUNDRY_BASE_URL=https://<resource-name>.services.ai.azure.com/anthropic
+FOUNDRY_BASE_URL=https://<resource-name>.services.ai.azure.com/anthropic/v1
 FOUNDRY_MODEL=claude-sonnet-4-5
+ANTHROPIC_VERSION=2023-06-01
 
 # Application Configuration
 PORT=3000
@@ -198,7 +199,7 @@ claude-agent-accelerator-on-azure/
 │   │   ├── subagents.ts       # Subagent initialization
 │   │   └── config.ts          # Agent configuration
 │   ├── models/
-│   │   └── foundry-client.ts  # Foundry Claude API client
+│   │   └── agent/main-agent.ts  # Claude Agent SDK + Foundry config
 │   ├── observability/
 │   │   ├── tracing.ts         # OpenTelemetry setup
 │   │   └── evaluation.ts      # Foundry evaluation integration

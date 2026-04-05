@@ -147,6 +147,7 @@ Azure Container Apps offers:
 - Claude model hosted on Azure-native endpoints
 - Authentication via Foundry API key (compatible with SDK's `apiKey` and `baseURL` options)
 - Optimized for Azure region latency
+- Uses required `anthropic-version` header (`2023-06-01`) for Foundry endpoints
 
 ### 3. Azure Container Apps Deployment
 - Dockerfile with multi-stage build
@@ -177,7 +178,7 @@ Azure Container Apps offers:
 
 3. **Foundry Setup**:
    - Get Foundry API key or configure Entra ID auth
-   - Note your Foundry base URL: `https://<resource-name>.services.ai.azure.com/anthropic`
+   - Note your Foundry base URL: `https://<resource-name>.services.ai.azure.com/anthropic/v1`
 
 ### Local Development
 
@@ -197,8 +198,9 @@ Azure Container Apps offers:
    Required variables:
    ```env
    FOUNDRY_API_KEY=your_foundry_api_key_here
-   FOUNDRY_BASE_URL=https://your-resource-name.services.ai.azure.com/anthropic
+   FOUNDRY_BASE_URL=https://your-resource-name.services.ai.azure.com/anthropic/v1
    FOUNDRY_MODEL=claude-sonnet-4-5
+   ANTHROPIC_VERSION=2023-06-01
    ```
 
 3. **Run the Agent**:
@@ -220,7 +222,7 @@ Azure Container Apps offers:
    chmod +x infrastructure/deploy-aca.sh
 
    export FOUNDRY_API_KEY="your_key"
-   export FOUNDRY_BASE_URL="https://your-resource.services.ai.azure.com/anthropic"
+   export FOUNDRY_BASE_URL="https://your-resource.services.ai.azure.com/anthropic/v1"
 
    ./infrastructure/deploy-aca.sh
    ```
@@ -232,7 +234,7 @@ Azure Container Apps offers:
      --template-file infrastructure/bicep/main.bicep \
      --parameters \
        foundryApiKey="your_key" \
-       foundryBaseUrl="https://your-resource.services.ai.azure.com/anthropic"
+       foundryBaseUrl="https://your-resource.services.ai.azure.com/anthropic/v1"
    ```
 
 3. **Access Logs**:

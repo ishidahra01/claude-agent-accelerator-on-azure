@@ -6,10 +6,20 @@
 import { tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 
+type WafPillar = 'security' | 'cost' | 'reliability' | 'performance' | 'operational';
+
+type WafGuidance = {
+  principles: string[];
+  azureServices?: Record<string, string[]>;
+  commonIssues?: string[];
+  commonWaste?: string[];
+  savingsStrategies?: string[];
+};
+
 /**
  * Azure Well-Architected Framework knowledge base
  */
-const wafKnowledge = {
+const wafKnowledge: Record<WafPillar, WafGuidance> = {
   security: {
     principles: [
       'Defense in depth',
