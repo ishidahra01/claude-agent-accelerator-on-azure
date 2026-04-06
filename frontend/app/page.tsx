@@ -179,7 +179,7 @@ type PayloadPreview = {
   truncated: boolean;
 };
 
-type TabId = 'conversation' | 'agents' | 'tools' | 'trace' | 'report';
+type TabId = 'conversation' | 'trace' | 'report';
 
 type ToolExecution = {
   toolUseId: string;
@@ -226,9 +226,7 @@ const MAX_EVENT_HISTORY = 400;
 const MAX_PAYLOAD_PREVIEW_CHARS = 16000;
 
 const tabs: Array<{ id: TabId; label: string; hint: string }> = [
-  { id: 'conversation', label: 'Execution Flow', hint: '実行フロー' },
-  { id: 'agents', label: 'Agents', hint: 'エージェント' },
-  { id: 'tools', label: 'Tools', hint: 'ツール詳細' },
+  { id: 'conversation', label: 'Execution Flow', hint: '会話と実行ログ' },
   { id: 'trace', label: 'Timeline', hint: 'タイムライン' },
   { id: 'report', label: 'Report', hint: '分析結果' },
 ];
@@ -494,6 +492,11 @@ function buildTraceRows(
 
 function ExecutionStepCard({ step }: { step: ExecutionStep }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const agentName = step.metadata?.agentName;
+  const durationLabel =
+    step.metadata?.elapsedTime && Number.isFinite(step.metadata.elapsedTime)
+      ? `${step.metadata.elapsedTime.toFixed(1)} s`
+      : undefined;
 
   const getStepIcon = () => {
     switch (step.type) {
@@ -590,6 +593,27 @@ function ExecutionStepCard({ step }: { step: ExecutionStep }) {
             </div>
           </div>
 
+          {(agentName || step.metadata?.toolName || step.metadata?.taskId || durationLabel) && (
+            <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-medium opacity-75">
+              {agentName && (
+                <span className="rounded-full border border-current/15 px-2 py-1">{agentName}</span>
+              )}
+              {step.metadata?.toolName && (
+                <span className="rounded-full border border-current/15 px-2 py-1">
+                  tool {step.metadata.toolName}
+                </span>
+              )}
+              {step.metadata?.taskId && (
+                <span className="rounded-full border border-current/15 px-2 py-1">
+                  task {step.metadata.taskId.slice(0, 8)}
+                </span>
+              )}
+              {durationLabel && (
+                <span className="rounded-full border border-current/15 px-2 py-1">{durationLabel}</span>
+              )}
+            </div>
+          )}
+
           {step.content && !hasExpandableContent && (
             <div className="mt-2 text-sm leading-6 whitespace-pre-wrap">{step.content}</div>
           )}
@@ -643,9 +667,9 @@ export default function Home() {
   const [runtimeContext, setRuntimeContext] = useState<RuntimeContext | null>(null);
   const [usage, setUsage] = useState<StreamUsage | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('conversation');
-  const [selectedToolId, setSelectedToolId] = useState<string | null>(null);
   const [requestError, setRequestError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const executionStepsRef = useRef<ExecutionStep[]>([]);
   const deferredEvents = useDeferredValue(events);
 
   const toolExecutions = useMemo(() => buildToolExecutions(deferredEvents), [deferredEvents]);
@@ -654,20 +678,9 @@ export default function Home() {
     () => buildTraceRows(deferredEvents, toolExecutions, taskExecutions),
     [deferredEvents, toolExecutions, taskExecutions]
   );
-  const selectedTool = useMemo(
-    () => toolExecutions.find((tool) => tool.toolUseId === selectedToolId) ?? toolExecutions[0] ?? null,
-    [selectedToolId, toolExecutions]
-  );
-
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
-
-  useEffect(() => {
-    if (!selectedToolId && toolExecutions[0]) {
-      setSelectedToolId(toolExecutions[0].toolUseId);
-    }
-  }, [selectedToolId, toolExecutions]);
 
   function addMessage(next: Omit<Message, 'id'>) {
     setMessages((previous) => [
@@ -712,13 +725,23 @@ export default function Home() {
     setRunMeta(null);
     setRuntimeContext(null);
     setUsage(null);
-    setSelectedToolId(null);
     setRequestError(null);
+    executionStepsRef.current = [];
     setExecutionSteps([]);
   }
 
+  function setExecutionStepsWithSync(
+    updater: (previous: ExecutionStep[]) => ExecutionStep[]
+  ) {
+    setExecutionSteps((previous) => {
+      const next = updater(previous);
+      executionStepsRef.current = next;
+      return next;
+    });
+  }
+
   function addExecutionStep(step: Omit<ExecutionStep, 'id'>) {
-    setExecutionSteps((previous) => [
+    setExecutionStepsWithSync((previous) => [
       ...previous,
       {
         ...step,
@@ -728,13 +751,52 @@ export default function Home() {
   }
 
   function updateExecutionStep(id: string, updates: Partial<ExecutionStep>) {
-    setExecutionSteps((previous) =>
+    setExecutionStepsWithSync((previous) =>
       previous.map((step) => (step.id === id ? { ...step, ...updates } : step))
     );
   }
 
   function findExecutionStep(predicate: (step: ExecutionStep) => boolean) {
-    return executionSteps.find(predicate);
+    return executionStepsRef.current.find(predicate);
+  }
+
+  function finalizeRunningSteps(timestamp: string) {
+    setExecutionStepsWithSync((previous) =>
+      previous.map((step) => {
+        if (step.status !== 'running') {
+          return step;
+        }
+
+        if (step.type === 'tool') {
+          return {
+            ...step,
+            status: 'completed',
+            timestamp,
+            metadata: {
+              ...step.metadata,
+              output:
+                step.metadata?.output ??
+                createPayloadPreview('Tool completed without a captured output payload.'),
+            },
+          };
+        }
+
+        if (step.type === 'task') {
+          return {
+            ...step,
+            status: 'completed',
+            timestamp,
+            content: step.content ?? 'Task completed.',
+          };
+        }
+
+        return {
+          ...step,
+          status: 'completed',
+          timestamp,
+        };
+      })
+    );
   }
 
 
@@ -750,193 +812,248 @@ export default function Home() {
       return next.slice(next.length - MAX_EVENT_HISTORY);
     });
 
-    if (event.type === 'run_started') {
+    if (sanitizedEvent.type === 'run_started') {
       setRunMeta({
-        requestId: event.requestId,
-        resourceCount: event.resourceCount,
-        scope: event.scope,
-        model: event.model,
-        tracing: event.tracing,
-        agents: event.agents,
-        mcpServers: event.mcpServers,
+        requestId: sanitizedEvent.requestId,
+        resourceCount: sanitizedEvent.resourceCount,
+        scope: sanitizedEvent.scope,
+        model: sanitizedEvent.model,
+        tracing: sanitizedEvent.tracing,
+        agents: sanitizedEvent.agents,
+        mcpServers: sanitizedEvent.mcpServers,
       });
       addMessage({
         type: 'status',
         title: 'Run Started',
-        content: `Request ${event.requestId.slice(0, 8)} started with ${event.resourceCount} resources.`,
-        timestamp: event.timestamp,
+        content: `Request ${sanitizedEvent.requestId.slice(0, 8)} started with ${sanitizedEvent.resourceCount} resources.`,
+        timestamp: sanitizedEvent.timestamp,
       });
       return;
     }
 
-    if (event.type === 'runtime_context') {
+    if (sanitizedEvent.type === 'runtime_context') {
       setRuntimeContext({
-        cwd: event.cwd,
-        tools: event.tools,
-        mcpServers: event.mcpServers,
-        agents: event.agents,
-        skills: event.skills,
-        model: event.model,
-        permissionMode: event.permissionMode,
-        apiKeySource: event.apiKeySource,
+        cwd: sanitizedEvent.cwd,
+        tools: sanitizedEvent.tools,
+        mcpServers: sanitizedEvent.mcpServers,
+        agents: sanitizedEvent.agents,
+        skills: sanitizedEvent.skills,
+        model: sanitizedEvent.model,
+        permissionMode: sanitizedEvent.permissionMode,
+        apiKeySource: sanitizedEvent.apiKeySource,
       });
       return;
     }
 
-    if (event.type === 'status') {
+    if (sanitizedEvent.type === 'status') {
       addMessage({
         type: 'status',
         title: 'Status',
-        content: event.message,
-        timestamp: event.timestamp,
+        content: sanitizedEvent.message,
+        timestamp: sanitizedEvent.timestamp,
       });
       return;
     }
 
-    if (event.type === 'task_started') {
-      const agentName = inferAgentLane(event.description);
+    if (sanitizedEvent.type === 'task_started') {
+      const agentName = inferAgentLane(sanitizedEvent.description);
       addExecutionStep({
         type: 'task',
-        title: event.description,
+        title: sanitizedEvent.description,
         status: 'running',
-        timestamp: event.timestamp,
+        timestamp: sanitizedEvent.timestamp,
         metadata: {
-          taskId: event.taskId,
-          taskDescription: event.description,
+          taskId: sanitizedEvent.taskId,
+          taskDescription: sanitizedEvent.description,
           agentName,
         },
       });
       addMessage({
         type: 'status',
         title: 'Task',
-        content: `Started: ${event.description}`,
-        timestamp: event.timestamp,
+        content: `Started: ${sanitizedEvent.description}`,
+        timestamp: sanitizedEvent.timestamp,
       });
       return;
     }
 
-    if (event.type === 'task_progress') {
-      const step = findExecutionStep(s => s.metadata?.taskId === event.taskId);
+    if (sanitizedEvent.type === 'task_progress') {
+      const step = findExecutionStep((s) => s.metadata?.taskId === sanitizedEvent.taskId);
       if (step) {
         updateExecutionStep(step.id, {
-          title: event.description,
+          title: sanitizedEvent.description,
+          content: sanitizedEvent.summary ?? step.content,
           metadata: {
             ...step.metadata,
-            taskDescription: event.description,
+            taskDescription: sanitizedEvent.description,
+            toolName: sanitizedEvent.lastToolName ?? step.metadata?.toolName,
+            elapsedTime: sanitizedEvent.usage?.durationMs
+              ? sanitizedEvent.usage.durationMs / 1000
+              : step.metadata?.elapsedTime,
           },
         });
       }
       return;
     }
 
-    if (event.type === 'task_completed') {
-      const step = findExecutionStep(s => s.metadata?.taskId === event.taskId);
+    if (sanitizedEvent.type === 'task_completed') {
+      const step = findExecutionStep((s) => s.metadata?.taskId === sanitizedEvent.taskId);
       if (step) {
         updateExecutionStep(step.id, {
-          status: event.status === 'failed' ? 'failed' : 'completed',
-          content: event.summary,
+          status: sanitizedEvent.status === 'failed' ? 'failed' : 'completed',
+          content: sanitizedEvent.summary,
+          timestamp: sanitizedEvent.timestamp,
+          metadata: {
+            ...step.metadata,
+            elapsedTime: sanitizedEvent.usage?.durationMs
+              ? sanitizedEvent.usage.durationMs / 1000
+              : step.metadata?.elapsedTime,
+          },
+        });
+      } else {
+        addExecutionStep({
+          type: 'task',
+          title: sanitizedEvent.summary,
+          content: sanitizedEvent.summary,
+          status: sanitizedEvent.status === 'failed' ? 'failed' : 'completed',
+          timestamp: sanitizedEvent.timestamp,
+          metadata: {
+            taskId: sanitizedEvent.taskId,
+            agentName: 'main-agent',
+            elapsedTime: sanitizedEvent.usage?.durationMs
+              ? sanitizedEvent.usage.durationMs / 1000
+              : undefined,
+          },
         });
       }
       addMessage({
-        type: event.status === 'failed' ? 'error' : 'status',
+        type: sanitizedEvent.status === 'failed' ? 'error' : 'status',
         title: 'Task Result',
-        content: `${event.status.toUpperCase()}: ${event.summary}`,
-        timestamp: event.timestamp,
+        content: `${sanitizedEvent.status.toUpperCase()}: ${sanitizedEvent.summary}`,
+        timestamp: sanitizedEvent.timestamp,
       });
       return;
     }
 
-    if (event.type === 'tool_start') {
-      const sanitizedInput = createPayloadPreview(event.toolInput);
+    if (sanitizedEvent.type === 'tool_start') {
       addExecutionStep({
         type: 'tool',
-        title: event.toolName,
+        title: sanitizedEvent.toolName,
         status: 'running',
-        timestamp: event.timestamp,
+        timestamp: sanitizedEvent.timestamp,
         metadata: {
-          toolName: event.toolName,
-          toolUseId: event.toolUseId,
-          input: sanitizedInput,
+          toolName: sanitizedEvent.toolName,
+          toolUseId: sanitizedEvent.toolUseId,
+          input: createPayloadPreview(sanitizedEvent.toolInput),
         },
       });
       return;
     }
 
-    if (event.type === 'tool_end') {
-      const step = findExecutionStep(s => s.metadata?.toolUseId === event.toolUseId);
+    if (sanitizedEvent.type === 'tool_progress') {
+      const step = findExecutionStep((s) => s.metadata?.toolUseId === sanitizedEvent.toolUseId);
       if (step) {
-        const sanitizedOutput = event.toolOutput ? createPayloadPreview(event.toolOutput) : undefined;
         updateExecutionStep(step.id, {
-          status: event.isError ? 'error' : 'completed',
           metadata: {
             ...step.metadata,
-            output: sanitizedOutput,
+            taskId: sanitizedEvent.taskId ?? step.metadata?.taskId,
+            elapsedTime: sanitizedEvent.elapsedTimeSeconds,
           },
         });
       }
       return;
     }
 
-    if (event.type === 'text') {
-      // Check if we have an existing reasoning step that's still being built
-      const lastStep = executionSteps[executionSteps.length - 1];
-      if (lastStep && lastStep.type === 'reasoning' && lastStep.status === 'running') {
-        updateExecutionStep(lastStep.id, {
-          content: (lastStep.content || '') + event.text,
+    if (sanitizedEvent.type === 'tool_end') {
+      const step = findExecutionStep((s) => s.metadata?.toolUseId === sanitizedEvent.toolUseId);
+      if (step) {
+        updateExecutionStep(step.id, {
+          status: sanitizedEvent.isError ? 'error' : 'completed',
+          timestamp: sanitizedEvent.timestamp,
+          metadata: {
+            ...step.metadata,
+            output:
+              (typeof sanitizedEvent.toolOutput === 'undefined'
+                ? undefined
+                : createPayloadPreview(sanitizedEvent.toolOutput)) ??
+              createPayloadPreview('Tool completed without a captured output payload.'),
+          },
         });
       } else {
-        // Create a new reasoning step
+        addExecutionStep({
+          type: 'tool',
+          title: sanitizedEvent.toolName,
+          status: sanitizedEvent.isError ? 'error' : 'completed',
+          timestamp: sanitizedEvent.timestamp,
+          metadata: {
+            toolName: sanitizedEvent.toolName,
+            toolUseId: sanitizedEvent.toolUseId,
+            output:
+              (typeof sanitizedEvent.toolOutput === 'undefined'
+                ? undefined
+                : createPayloadPreview(sanitizedEvent.toolOutput)) ??
+              createPayloadPreview('Tool completed without a captured output payload.'),
+          },
+        });
+      }
+      return;
+    }
+
+    if (sanitizedEvent.type === 'text') {
+      const lastStep = executionStepsRef.current[executionStepsRef.current.length - 1];
+      if (lastStep && lastStep.type === 'reasoning' && lastStep.status === 'running') {
+        updateExecutionStep(lastStep.id, {
+          content: (lastStep.content || '') + sanitizedEvent.text,
+          timestamp: sanitizedEvent.timestamp,
+        });
+      } else {
         addExecutionStep({
           type: 'reasoning',
           title: 'Thinking',
-          content: event.text,
+          content: sanitizedEvent.text,
           status: 'running',
-          timestamp: event.timestamp,
+          timestamp: sanitizedEvent.timestamp,
         });
       }
-      appendAssistantText(event.text, event.timestamp);
+      appendAssistantText(sanitizedEvent.text, sanitizedEvent.timestamp);
       return;
     }
 
-    if (event.type === 'usage') {
-      setUsage(event.usage);
+    if (sanitizedEvent.type === 'usage') {
+      setUsage(sanitizedEvent.usage);
       return;
     }
 
-    if (event.type === 'report') {
-      setReport(event.report);
+    if (sanitizedEvent.type === 'report') {
+      setReport(sanitizedEvent.report);
       setActiveTab('report');
       addMessage({
         type: 'status',
         title: 'Report Ready',
         content: 'Final analysis report is available.',
-        timestamp: event.timestamp,
+        timestamp: sanitizedEvent.timestamp,
       });
       return;
     }
 
-    if (event.type === 'error') {
-      setRequestError(event.error);
+    if (sanitizedEvent.type === 'error') {
+      setRequestError(sanitizedEvent.error);
       addMessage({
         type: 'error',
         title: 'Execution Error',
-        content: event.error,
-        timestamp: event.timestamp,
+        content: sanitizedEvent.error,
+        timestamp: sanitizedEvent.timestamp,
       });
       return;
     }
 
-    if (event.type === 'done') {
-      // Mark any running reasoning steps as completed
-      const lastStep = executionSteps[executionSteps.length - 1];
-      if (lastStep && lastStep.type === 'reasoning' && lastStep.status === 'running') {
-        updateExecutionStep(lastStep.id, { status: 'completed' });
-      }
+    if (sanitizedEvent.type === 'done') {
+      finalizeRunningSteps(sanitizedEvent.timestamp);
       addMessage({
         type: 'status',
         title: 'Run Complete',
         content: 'Streaming finished.',
-        timestamp: event.timestamp,
+        timestamp: sanitizedEvent.timestamp,
       });
     }
   }
@@ -1044,9 +1161,19 @@ export default function Home() {
           }
         }
       }
+
+      if (buffer.trim().startsWith('data: ')) {
+        try {
+          const parsed = JSON.parse(buffer.trim().slice(6)) as FrontendEvent;
+          handleEvent(parsed);
+        } catch (error) {
+          console.error('Failed to parse trailing event', error);
+        }
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       setRequestError(message);
+      finalizeRunningSteps(new Date().toISOString());
       addMessage({
         type: 'error',
         title: 'Request Error',
@@ -1239,13 +1366,56 @@ export default function Home() {
             <div className="mt-4 min-h-0 flex-1 overflow-hidden rounded-[28px] border border-white/70 bg-white/70 p-4">
               {activeTab === 'conversation' && (
                 <div className="flex h-full flex-col overflow-hidden">
-                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 p-3">
-                    <div>
-                      <div className="text-sm font-semibold text-slate-900">Execution Flow</div>
-                      <div className="text-xs text-slate-500">タスク、ツール、推論を時系列で表示</div>
+                  <div className="mb-4 space-y-3 rounded-2xl bg-slate-50 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900">Execution Flow</div>
+                        <div className="text-xs text-slate-500">
+                          Conversation を主表示にして、タスク、ツール、推論を一本化
+                        </div>
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {executionSteps.length} step{executionSteps.length === 1 ? '' : 's'}
+                      </div>
                     </div>
-                    <div className="text-xs text-slate-500">
-                      {executionSteps.length} step{executionSteps.length === 1 ? '' : 's'}
+
+                    <div className="grid gap-3 md:grid-cols-4">
+                      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                        <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Tasks</div>
+                        <div className="mt-1 text-lg font-semibold text-slate-950">{taskExecutions.length}</div>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                        <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Tools</div>
+                        <div className="mt-1 text-lg font-semibold text-slate-950">{toolExecutions.length}</div>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                        <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Model</div>
+                        <div className="mt-1 text-sm font-semibold text-slate-950">
+                          {runtimeContext?.model ?? runMeta?.model ?? 'Waiting'}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                        <div className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Available Tools</div>
+                        <div className="mt-1 text-lg font-semibold text-slate-950">
+                          {runtimeContext?.tools.length ?? 0}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 text-xs text-slate-600">
+                      {(runtimeContext?.agents ?? runMeta?.agents.map((agent) => agent.name) ?? []).map((agent) => (
+                        <span
+                          key={agent}
+                          className="rounded-full border border-slate-200 bg-white px-3 py-1 font-medium text-slate-700"
+                        >
+                          {agent}
+                        </span>
+                      ))}
+                      {!runtimeContext?.agents?.length && !runMeta?.agents.length && (
+                        <span className="rounded-full border border-dashed border-slate-300 px-3 py-1">
+                          Waiting for runtime context
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -1261,280 +1431,6 @@ export default function Home() {
                     ))}
 
                     <div ref={messagesEndRef} />
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'agents' && (
-                <div className="grid h-full gap-4 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
-                  <div className="space-y-4 overflow-auto pr-1">
-                    <div className="rounded-[24px] border border-slate-200 bg-white p-4">
-                      <div className="text-sm font-semibold text-slate-900">Agent topology</div>
-                      <div className="mt-3 space-y-3">
-                        <div className="rounded-2xl bg-slate-950 px-4 py-4 text-white">
-                          <div className="text-xs uppercase tracking-[0.2em] text-slate-300">Main Agent</div>
-                          <div className="mt-2 text-lg font-semibold">Azure Resource Analysis Agent</div>
-                          <div className="mt-1 text-sm text-slate-300">
-                            Orchestrates exploration, security, and cost analysis.
-                          </div>
-                        </div>
-                        {(runMeta?.agents ?? []).map((agent) => (
-                          <div
-                            key={agent.name}
-                            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"
-                          >
-                            <div className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                              {agent.name}
-                            </div>
-                            <div className="mt-2 text-base font-semibold text-slate-900">
-                              {agent.description}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="rounded-[24px] border border-slate-200 bg-white p-4">
-                      <div className="text-sm font-semibold text-slate-900">Runtime context</div>
-                      <dl className="mt-3 space-y-2 text-sm text-slate-600">
-                        <div className="flex justify-between gap-4">
-                          <dt>Model</dt>
-                          <dd className="font-medium text-slate-900">{runtimeContext?.model ?? 'Waiting'}</dd>
-                        </div>
-                        <div className="flex justify-between gap-4">
-                          <dt>Permission</dt>
-                          <dd className="font-medium text-slate-900">
-                            {runtimeContext?.permissionMode ?? 'Waiting'}
-                          </dd>
-                        </div>
-                        <div className="flex justify-between gap-4">
-                          <dt>API key source</dt>
-                          <dd className="font-medium text-slate-900">
-                            {runtimeContext?.apiKeySource ?? 'Waiting'}
-                          </dd>
-                        </div>
-                      </dl>
-                    </div>
-                  </div>
-
-                  <div className="overflow-auto pr-1">
-                    <div className="rounded-[24px] border border-slate-200 bg-white p-4">
-                      <div className="mb-4 flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-semibold text-slate-900">Task timeline</div>
-                          <div className="text-xs text-slate-500">
-                            SDK が通知した task started / progress / completed を表示
-                          </div>
-                        </div>
-                        <div className="text-xs text-slate-500">{taskExecutions.length} tasks</div>
-                      </div>
-
-                      <div className="space-y-3">
-                        {taskExecutions.length === 0 && (
-                          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">
-                            まだ task イベントは届いていません。
-                          </div>
-                        )}
-
-                        {taskExecutions.map((task) => (
-                          <div key={task.taskId} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                              <div>
-                                <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                                  {inferAgentLane(task.description)}
-                                </div>
-                                <div className="mt-1 text-base font-semibold text-slate-900">
-                                  {task.description}
-                                </div>
-                              </div>
-                              <span
-                                className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                                  task.status === 'completed'
-                                    ? 'bg-emerald-100 text-emerald-700'
-                                    : task.status === 'failed'
-                                      ? 'bg-rose-100 text-rose-700'
-                                      : task.status === 'stopped'
-                                        ? 'bg-amber-100 text-amber-700'
-                                        : 'bg-sky-100 text-sky-700'
-                                }`}
-                              >
-                                {task.status}
-                              </span>
-                            </div>
-                            <div className="mt-3 grid gap-3 text-sm text-slate-600 md:grid-cols-3">
-                              <div>
-                                <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Started</div>
-                                <div className="mt-1 font-medium text-slate-900">
-                                  {formatTimestamp(task.startedAt)}
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Duration</div>
-                                <div className="mt-1 font-medium text-slate-900">
-                                  {getRelativeDuration(task.startedAt, task.endedAt)}
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Last tool</div>
-                                <div className="mt-1 font-medium text-slate-900">
-                                  {task.lastToolName ?? 'n/a'}
-                                </div>
-                              </div>
-                            </div>
-                            {task.summary && (
-                              <div className="mt-3 rounded-2xl bg-white px-3 py-3 text-sm leading-6 text-slate-700">
-                                {task.summary}
-                              </div>
-                            )}
-                            {task.prompt && (
-                              <details className="mt-3 rounded-2xl bg-white px-3 py-3 text-sm text-slate-700">
-                                <summary className="cursor-pointer font-medium text-slate-900">Prompt snapshot</summary>
-                                <pre className="mt-3 overflow-auto whitespace-pre-wrap font-mono text-xs leading-6 text-slate-700">
-                                  {task.prompt}
-                                </pre>
-                              </details>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'tools' && (
-                <div className="grid h-full gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
-                  <div className="overflow-auto pr-1">
-                    <div className="rounded-[24px] border border-slate-200 bg-white p-4">
-                      <div className="mb-4 flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-semibold text-slate-900">Tool executions</div>
-                          <div className="text-xs text-slate-500">各ツールの開始・進捗・終了を追跡</div>
-                        </div>
-                        <div className="text-xs text-slate-500">{toolExecutions.length} observed</div>
-                      </div>
-
-                      <div className="space-y-2">
-                        {toolExecutions.length === 0 && (
-                          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">
-                            ツールイベント待機中です。
-                          </div>
-                        )}
-
-                        {toolExecutions.map((tool) => (
-                          <button
-                            key={tool.toolUseId}
-                            type="button"
-                            onClick={() => setSelectedToolId(tool.toolUseId)}
-                            className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
-                              selectedTool?.toolUseId === tool.toolUseId
-                                ? 'border-slate-900 bg-slate-950 text-white'
-                                : 'border-slate-200 bg-slate-50 text-slate-900 hover:bg-white'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="font-semibold">{tool.toolName}</div>
-                              <span
-                                className={`rounded-full px-2 py-1 text-[11px] font-semibold ${
-                                  selectedTool?.toolUseId === tool.toolUseId
-                                    ? 'bg-white/15 text-white'
-                                    : tool.status === 'completed'
-                                      ? 'bg-emerald-100 text-emerald-700'
-                                      : tool.status === 'error'
-                                        ? 'bg-rose-100 text-rose-700'
-                                        : 'bg-sky-100 text-sky-700'
-                                }`}
-                              >
-                                {tool.status}
-                              </span>
-                            </div>
-                            <div className={`mt-2 text-xs ${selectedTool?.toolUseId === tool.toolUseId ? 'text-slate-300' : 'text-slate-500'}`}>
-                              {truncate(tool.toolInput?.text ?? '', 90)}
-                            </div>
-                            <div className={`mt-3 flex items-center justify-between text-xs ${selectedTool?.toolUseId === tool.toolUseId ? 'text-slate-300' : 'text-slate-500'}`}>
-                              <span>{formatTimestamp(tool.startedAt)}</span>
-                              <span>{getRelativeDuration(tool.startedAt, tool.endedAt)}</span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="overflow-auto pr-1">
-                    <div className="rounded-[24px] border border-slate-200 bg-white p-4">
-                      {!selectedTool && (
-                        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-sm text-slate-500">
-                          左側からツール呼び出しを選ぶと、入力と出力を確認できます。
-                        </div>
-                      )}
-
-                      {selectedTool && (
-                        <div className="space-y-4">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                              <div className="text-xs uppercase tracking-[0.18em] text-slate-500">Tool detail</div>
-                              <div className="mt-1 text-2xl font-semibold text-slate-950">
-                                {selectedTool.toolName}
-                              </div>
-                            </div>
-                            <div className="rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                              {selectedTool.toolUseId}
-                            </div>
-                          </div>
-
-                          <div className="grid gap-3 md:grid-cols-4">
-                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                              <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Status</div>
-                              <div className="mt-2 font-semibold text-slate-950">{selectedTool.status}</div>
-                            </div>
-                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                              <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Parent</div>
-                              <div className="mt-2 font-semibold text-slate-950">
-                                {selectedTool.parentToolUseId ?? 'root'}
-                              </div>
-                            </div>
-                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                              <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Task</div>
-                              <div className="mt-2 font-semibold text-slate-950">
-                                {selectedTool.taskId ?? 'n/a'}
-                              </div>
-                            </div>
-                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                              <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Duration</div>
-                              <div className="mt-2 font-semibold text-slate-950">
-                                {getRelativeDuration(selectedTool.startedAt, selectedTool.endedAt)}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="grid gap-4 xl:grid-cols-2">
-                            <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-                              <div className="mb-3 text-sm font-semibold text-slate-900">Input</div>
-                              <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap rounded-2xl bg-slate-950 p-4 font-mono text-xs leading-6 text-slate-100">
-                                {selectedTool.toolInput?.text ?? ''}
-                              </pre>
-                              {selectedTool.toolInput?.truncated && (
-                                <div className="mt-2 text-xs text-slate-500">
-                                  Large payload truncated to keep the UI responsive.
-                                </div>
-                              )}
-                            </div>
-                            <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-                              <div className="mb-3 text-sm font-semibold text-slate-900">Output</div>
-                              <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap rounded-2xl bg-slate-950 p-4 font-mono text-xs leading-6 text-slate-100">
-                                {selectedTool.toolOutput?.text ?? ''}
-                              </pre>
-                              {selectedTool.toolOutput?.truncated && (
-                                <div className="mt-2 text-xs text-slate-500">
-                                  Large payload truncated to keep the UI responsive.
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
                   </div>
                 </div>
               )}

@@ -387,7 +387,7 @@ Then open http://localhost:4000 in your browser.
 
 **Chat UI Features:**
 - 🎯 **Real-time streaming** - See agent responses as they're generated
-- 🔧 **Tool visibility** - Watch tool execution in real-time
+- 🔧 **Unified execution flow** - Follow tasks, tool calls, and reasoning in one conversation timeline
 - 📊 **Status updates** - Track analysis progress step-by-step
 - 💬 **Chat-like interface** - Similar to Claude Code / GitHub Copilot
 - 📋 **Sample data loader** - One-click loading of example Azure resources
@@ -397,9 +397,9 @@ Then open http://localhost:4000 in your browser.
 2. Or paste your own Azure resource export JSON
 3. Click "Analyze" to start the analysis
 4. Watch in real-time as the agent:
-   - Uses tools to process data
-   - Generates streaming responses
-   - Produces the final analysis report
+  - Delegates tasks and runs tools
+  - Streams reasoning and status updates into a single execution flow
+  - Produces the final analysis report
 
 ### API Usage Examples
 
