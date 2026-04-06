@@ -226,11 +226,11 @@ const MAX_EVENT_HISTORY = 400;
 const MAX_PAYLOAD_PREVIEW_CHARS = 16000;
 
 const tabs: Array<{ id: TabId; label: string; hint: string }> = [
-  { id: 'conversation', label: 'Conversation', hint: '返答の流れ' },
-  { id: 'agents', label: 'Agents', hint: 'Main / Subagent' },
-  { id: 'tools', label: 'Tool I/O', hint: '入力と出力' },
-  { id: 'trace', label: 'Trace', hint: '時間軸と実行順' },
-  { id: 'report', label: 'Report', hint: '最終結果' },
+  { id: 'conversation', label: 'Execution Flow', hint: '実行フロー' },
+  { id: 'agents', label: 'Agents', hint: 'エージェント' },
+  { id: 'tools', label: 'Tools', hint: 'ツール詳細' },
+  { id: 'trace', label: 'Timeline', hint: 'タイムライン' },
+  { id: 'report', label: 'Report', hint: '分析結果' },
 ];
 
 function formatTimestamp(timestamp: string) {
@@ -1100,15 +1100,12 @@ export default function Home() {
           <aside className="glass-panel flex flex-col gap-4 rounded-[28px] p-5 shadow-[0_24px_80px_rgba(66,84,120,0.12)]">
             <div className="space-y-3">
               <div className="inline-flex rounded-full border border-white/60 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-sky-700">
-                Agent Operations Console
+                Agent Operations
               </div>
               <div>
-                <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
-                  Azure Resource Analysis Agent
+                <h1 className="text-xl font-semibold tracking-tight text-slate-950">
+                  Azure Resource Analyzer
                 </h1>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Main Agent と Subagent の実行、ツールの入出力、Tracing 風の時間軸を同じ画面で確認できます。
-                </p>
               </div>
             </div>
 
@@ -1116,31 +1113,24 @@ export default function Home() {
               <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-3">
                 <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Resources</div>
                 <div className="mt-2 text-2xl font-semibold text-slate-950">{resourceCount}</div>
-                <div className="text-xs text-slate-500">parsed objects</div>
               </div>
               <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-3">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Tracing</div>
+                <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Status</div>
                 <div className="mt-2 text-lg font-semibold text-slate-950">
-                  {runMeta?.tracing.enabled ? 'Enabled' : 'Local'}
-                </div>
-                <div className="text-xs text-slate-500">
-                  {runMeta?.tracing.configured ? 'Application Insights ready' : 'UI-derived timeline'}
+                  {isAnalyzing ? 'Running' : 'Ready'}
                 </div>
               </div>
             </div>
 
             <div className="rounded-[24px] border border-slate-200/80 bg-white/72 p-4">
               <div className="mb-3 flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm font-semibold text-slate-900">Resource Input</h2>
-                  <p className="text-xs text-slate-500">ARM export or resource JSON</p>
-                </div>
+                <h2 className="text-sm font-semibold text-slate-900">Resource Input</h2>
                 <button
                   type="button"
                   onClick={loadSampleData}
                   className="rounded-full bg-sky-100 px-3 py-1 text-xs font-medium text-sky-700 transition hover:bg-sky-200"
                 >
-                  Load sample
+                  Sample
                 </button>
               </div>
               <textarea
@@ -1157,7 +1147,7 @@ export default function Home() {
                 disabled={!resources.trim() || isAnalyzing}
                 className="w-full rounded-[20px] bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
               >
-                {isAnalyzing ? 'Analyzing…' : 'Run analysis'}
+                {isAnalyzing ? 'Analyzing…' : 'Run Analysis'}
               </button>
               <button
                 type="button"
@@ -1171,27 +1161,19 @@ export default function Home() {
                 }}
                 className="w-full rounded-[20px] border border-slate-300 bg-white/80 px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Clear workspace
+                Clear
               </button>
             </form>
 
             <div className="rounded-[24px] border border-slate-200/80 bg-gradient-to-br from-white to-sky-50 p-4">
-              <div className="text-sm font-semibold text-slate-900">Runtime Snapshot</div>
+              <div className="text-sm font-semibold text-slate-900">Execution Stats</div>
               <div className="mt-3 space-y-2 text-sm text-slate-600">
                 <div className="flex items-center justify-between gap-4">
-                  <span>API</span>
-                  <span className="font-medium text-slate-900">{API_BASE_URL}</span>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span>Model</span>
-                  <span className="font-medium text-slate-900">{runMeta?.model ?? 'Waiting'}</span>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span>Tools observed</span>
+                  <span>Tools</span>
                   <span className="font-medium text-slate-900">{toolExecutions.length}</span>
                 </div>
                 <div className="flex items-center justify-between gap-4">
-                  <span>Subagent tasks</span>
+                  <span>Tasks</span>
                   <span className="font-medium text-slate-900">{taskExecutions.length}</span>
                 </div>
               </div>
@@ -1202,59 +1184,35 @@ export default function Home() {
             <header className="rounded-[28px] border border-white/70 bg-[linear-gradient(135deg,rgba(255,255,255,0.92),rgba(237,244,255,0.92))] p-5">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                 <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
-                    Live execution surface
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <h2 className="text-3xl font-semibold tracking-tight text-slate-950">
-                      Agent, Tool, Trace を分離して確認
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
+                      Agent Execution Monitor
                     </h2>
                     {isAnalyzing && (
-                      <span className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-                        <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
-                        Streaming
+                      <span className="inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700">
+                        <span className="h-2 w-2 animate-pulse rounded-full bg-sky-500" />
+                        Running
                       </span>
                     )}
                   </div>
-                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                    チャット表示に加えて、Subagent タスク、ツールの入力/出力、時間軸のトレース、水平方向の検証をタブごとに切り替えられます。
-                  </p>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[440px]">
+                <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[380px]">
                   <div className="rounded-2xl border border-slate-200/80 bg-white/78 p-3">
-                    <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Input tokens</div>
-                    <div className="mt-2 text-xl font-semibold text-slate-950">{usage?.inputTokens ?? 0}</div>
+                    <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Input</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-950">{usage?.inputTokens ?? 0}</div>
                   </div>
                   <div className="rounded-2xl border border-slate-200/80 bg-white/78 p-3">
-                    <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Output tokens</div>
-                    <div className="mt-2 text-xl font-semibold text-slate-950">{usage?.outputTokens ?? 0}</div>
+                    <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Output</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-950">{usage?.outputTokens ?? 0}</div>
                   </div>
                   <div className="rounded-2xl border border-slate-200/80 bg-white/78 p-3">
                     <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Duration</div>
-                    <div className="mt-2 text-xl font-semibold text-slate-950">
-                      {usage?.durationMs ? `${(usage.durationMs / 1000).toFixed(1)} s` : 'Waiting'}
+                    <div className="mt-1 text-lg font-semibold text-slate-950">
+                      {usage?.durationMs ? `${(usage.durationMs / 1000).toFixed(1)}s` : '-'}
                     </div>
                   </div>
                 </div>
-              </div>
-
-              <div className="mt-5 flex flex-wrap gap-2">
-                <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-medium text-white">
-                  Main Agent
-                </span>
-                <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-medium text-sky-700">
-                  Explore Agent
-                </span>
-                <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
-                  Security Analyzer
-                </span>
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">
-                  Cost Optimizer
-                </span>
-                <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-medium text-rose-700">
-                  Tool I/O + Trace
-                </span>
               </div>
             </header>
 
