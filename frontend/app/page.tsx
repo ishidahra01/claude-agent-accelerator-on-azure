@@ -155,6 +155,25 @@ type Message = {
   timestamp: string;
 };
 
+type ExecutionStep = {
+  id: string;
+  type: 'reasoning' | 'task' | 'tool' | 'status' | 'error' | 'user';
+  title: string;
+  content?: string;
+  status: 'running' | 'completed' | 'error' | 'failed';
+  timestamp: string;
+  metadata?: {
+    toolName?: string;
+    toolUseId?: string;
+    taskId?: string;
+    taskDescription?: string;
+    agentName?: string;
+    input?: PayloadPreview;
+    output?: PayloadPreview;
+    elapsedTime?: number;
+  };
+};
+
 type PayloadPreview = {
   text: string;
   truncated: boolean;
@@ -207,11 +226,11 @@ const MAX_EVENT_HISTORY = 400;
 const MAX_PAYLOAD_PREVIEW_CHARS = 16000;
 
 const tabs: Array<{ id: TabId; label: string; hint: string }> = [
-  { id: 'conversation', label: 'Conversation', hint: '返答の流れ' },
-  { id: 'agents', label: 'Agents', hint: 'Main / Subagent' },
-  { id: 'tools', label: 'Tool I/O', hint: '入力と出力' },
-  { id: 'trace', label: 'Trace', hint: '時間軸と実行順' },
-  { id: 'report', label: 'Report', hint: '最終結果' },
+  { id: 'conversation', label: 'Execution Flow', hint: '実行フロー' },
+  { id: 'agents', label: 'Agents', hint: 'エージェント' },
+  { id: 'tools', label: 'Tools', hint: 'ツール詳細' },
+  { id: 'trace', label: 'Timeline', hint: 'タイムライン' },
+  { id: 'report', label: 'Report', hint: '分析結果' },
 ];
 
 function formatTimestamp(timestamp: string) {
@@ -314,7 +333,7 @@ function buildToolExecutions(events: FrontendEvent[]) {
       tools.set(event.toolUseId, {
         toolUseId: event.toolUseId,
         toolName: event.toolName,
-        toolInput: event.toolInput,
+        toolInput: createPayloadPreview(event.toolInput),
         parentToolUseId: event.parentToolUseId,
         status: 'running',
         startedAt: event.timestamp,
@@ -340,7 +359,7 @@ function buildToolExecutions(events: FrontendEvent[]) {
         toolUseId: event.toolUseId,
         toolName: event.toolName,
         toolInput: current?.toolInput,
-        toolOutput: event.toolOutput,
+        toolOutput: event.toolOutput ? createPayloadPreview(event.toolOutput) : undefined,
         parentToolUseId: event.parentToolUseId,
         taskId: current?.taskId,
         status: event.isError ? 'error' : 'completed',
@@ -473,8 +492,149 @@ function buildTraceRows(
   };
 }
 
+function ExecutionStepCard({ step }: { step: ExecutionStep }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const getStepIcon = () => {
+    switch (step.type) {
+      case 'user':
+        return '👤';
+      case 'reasoning':
+        return '💭';
+      case 'task':
+        return '🤖';
+      case 'tool':
+        return '🔧';
+      case 'status':
+        return 'ℹ️';
+      case 'error':
+        return '❌';
+      default:
+        return '•';
+    }
+  };
+
+  const getStatusIcon = () => {
+    if (step.status === 'running') {
+      return (
+        <svg className="h-4 w-4 animate-spin text-sky-600" viewBox="0 0 24 24">
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="4"
+            fill="none"
+          />
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+          />
+        </svg>
+      );
+    }
+    if (step.status === 'completed') {
+      return <span className="text-emerald-600">✓</span>;
+    }
+    if (step.status === 'error' || step.status === 'failed') {
+      return <span className="text-rose-600">✗</span>;
+    }
+    return null;
+  };
+
+  const getStepColor = () => {
+    switch (step.type) {
+      case 'user':
+        return 'bg-slate-950 text-white border-slate-950';
+      case 'reasoning':
+        return 'bg-white border-slate-200 text-slate-900';
+      case 'task':
+        const agentName = step.metadata?.agentName || 'main-agent';
+        if (agentName === 'explore-agent') return 'bg-sky-50 border-sky-200 text-sky-900';
+        if (agentName === 'security-analyzer') return 'bg-amber-50 border-amber-200 text-amber-900';
+        if (agentName === 'cost-optimizer') return 'bg-emerald-50 border-emerald-200 text-emerald-900';
+        return 'bg-slate-50 border-slate-200 text-slate-900';
+      case 'tool':
+        return 'bg-purple-50 border-purple-200 text-purple-900';
+      case 'error':
+        return 'bg-rose-50 border-rose-200 text-rose-900';
+      default:
+        return 'bg-slate-50 border-slate-200 text-slate-700';
+    }
+  };
+
+  const hasExpandableContent = step.type === 'tool' || step.type === 'task';
+
+  return (
+    <div className={`rounded-2xl border px-4 py-3 ${getStepColor()}`}>
+      <div className="flex items-start gap-3">
+        <span className="text-lg">{getStepIcon()}</span>
+        <div className="flex-1">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold">{step.title}</span>
+              {getStatusIcon()}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs opacity-60">{formatTimestamp(step.timestamp)}</span>
+              {hasExpandableContent && (
+                <button
+                  onClick={() => setIsExpanded(!isExpanded)}
+                  className="text-xs font-medium opacity-60 hover:opacity-100"
+                >
+                  {isExpanded ? '▼' : '▶'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {step.content && !hasExpandableContent && (
+            <div className="mt-2 text-sm leading-6 whitespace-pre-wrap">{step.content}</div>
+          )}
+
+          {hasExpandableContent && isExpanded && (
+            <div className="mt-3 space-y-2">
+              {step.metadata?.input && (
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wider opacity-60">Input</div>
+                  <pre className="mt-1 overflow-auto rounded-lg bg-slate-950 px-3 py-2 text-xs text-slate-100">
+                    {step.metadata.input.text}
+                  </pre>
+                  {step.metadata.input.truncated && (
+                    <div className="mt-1 text-xs text-amber-600">⚠ Content truncated</div>
+                  )}
+                </div>
+              )}
+              {step.metadata?.output && (
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wider opacity-60">Output</div>
+                  <pre className="mt-1 overflow-auto rounded-lg bg-slate-950 px-3 py-2 text-xs text-slate-100">
+                    {step.metadata.output.text}
+                  </pre>
+                  {step.metadata.output.truncated && (
+                    <div className="mt-1 text-xs text-amber-600">⚠ Content truncated</div>
+                  )}
+                </div>
+              )}
+              {step.content && (
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wider opacity-60">Summary</div>
+                  <div className="mt-1 text-sm">{step.content}</div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [executionSteps, setExecutionSteps] = useState<ExecutionStep[]>([]);
   const [resources, setResources] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [events, setEvents] = useState<FrontendEvent[]>([]);
@@ -554,7 +714,29 @@ export default function Home() {
     setUsage(null);
     setSelectedToolId(null);
     setRequestError(null);
+    setExecutionSteps([]);
   }
+
+  function addExecutionStep(step: Omit<ExecutionStep, 'id'>) {
+    setExecutionSteps((previous) => [
+      ...previous,
+      {
+        ...step,
+        id: crypto.randomUUID(),
+      },
+    ]);
+  }
+
+  function updateExecutionStep(id: string, updates: Partial<ExecutionStep>) {
+    setExecutionSteps((previous) =>
+      previous.map((step) => (step.id === id ? { ...step, ...updates } : step))
+    );
+  }
+
+  function findExecutionStep(predicate: (step: ExecutionStep) => boolean) {
+    return executionSteps.find(predicate);
+  }
+
 
   function handleEvent(event: FrontendEvent) {
     const sanitizedEvent = sanitizeEvent(event);
@@ -612,6 +794,18 @@ export default function Home() {
     }
 
     if (event.type === 'task_started') {
+      const agentName = inferAgentLane(event.description);
+      addExecutionStep({
+        type: 'task',
+        title: event.description,
+        status: 'running',
+        timestamp: event.timestamp,
+        metadata: {
+          taskId: event.taskId,
+          taskDescription: event.description,
+          agentName,
+        },
+      });
       addMessage({
         type: 'status',
         title: 'Task',
@@ -621,7 +815,28 @@ export default function Home() {
       return;
     }
 
+    if (event.type === 'task_progress') {
+      const step = findExecutionStep(s => s.metadata?.taskId === event.taskId);
+      if (step) {
+        updateExecutionStep(step.id, {
+          title: event.description,
+          metadata: {
+            ...step.metadata,
+            taskDescription: event.description,
+          },
+        });
+      }
+      return;
+    }
+
     if (event.type === 'task_completed') {
+      const step = findExecutionStep(s => s.metadata?.taskId === event.taskId);
+      if (step) {
+        updateExecutionStep(step.id, {
+          status: event.status === 'failed' ? 'failed' : 'completed',
+          content: event.summary,
+        });
+      }
       addMessage({
         type: event.status === 'failed' ? 'error' : 'status',
         title: 'Task Result',
@@ -631,7 +846,54 @@ export default function Home() {
       return;
     }
 
+    if (event.type === 'tool_start') {
+      const sanitizedInput = createPayloadPreview(event.toolInput);
+      addExecutionStep({
+        type: 'tool',
+        title: event.toolName,
+        status: 'running',
+        timestamp: event.timestamp,
+        metadata: {
+          toolName: event.toolName,
+          toolUseId: event.toolUseId,
+          input: sanitizedInput,
+        },
+      });
+      return;
+    }
+
+    if (event.type === 'tool_end') {
+      const step = findExecutionStep(s => s.metadata?.toolUseId === event.toolUseId);
+      if (step) {
+        const sanitizedOutput = event.toolOutput ? createPayloadPreview(event.toolOutput) : undefined;
+        updateExecutionStep(step.id, {
+          status: event.isError ? 'error' : 'completed',
+          metadata: {
+            ...step.metadata,
+            output: sanitizedOutput,
+          },
+        });
+      }
+      return;
+    }
+
     if (event.type === 'text') {
+      // Check if we have an existing reasoning step that's still being built
+      const lastStep = executionSteps[executionSteps.length - 1];
+      if (lastStep && lastStep.type === 'reasoning' && lastStep.status === 'running') {
+        updateExecutionStep(lastStep.id, {
+          content: (lastStep.content || '') + event.text,
+        });
+      } else {
+        // Create a new reasoning step
+        addExecutionStep({
+          type: 'reasoning',
+          title: 'Thinking',
+          content: event.text,
+          status: 'running',
+          timestamp: event.timestamp,
+        });
+      }
       appendAssistantText(event.text, event.timestamp);
       return;
     }
@@ -665,6 +927,11 @@ export default function Home() {
     }
 
     if (event.type === 'done') {
+      // Mark any running reasoning steps as completed
+      const lastStep = executionSteps[executionSteps.length - 1];
+      if (lastStep && lastStep.type === 'reasoning' && lastStep.status === 'running') {
+        updateExecutionStep(lastStep.id, { status: 'completed' });
+      }
       addMessage({
         type: 'status',
         title: 'Run Complete',
@@ -686,11 +953,21 @@ export default function Home() {
     setMessages([]);
     setActiveTab('conversation');
 
+    const userRequestTimestamp = new Date().toISOString();
+
     addMessage({
       type: 'user',
       title: 'User Request',
       content: 'Azure resource analysis with execution visibility and tracing view',
-      timestamp: new Date().toISOString(),
+      timestamp: userRequestTimestamp,
+    });
+
+    addExecutionStep({
+      type: 'user',
+      title: 'User Request',
+      content: 'Azure resource analysis with execution visibility and tracing view',
+      status: 'completed',
+      timestamp: userRequestTimestamp,
     });
 
     addMessage({
@@ -823,15 +1100,12 @@ export default function Home() {
           <aside className="glass-panel flex flex-col gap-4 rounded-[28px] p-5 shadow-[0_24px_80px_rgba(66,84,120,0.12)]">
             <div className="space-y-3">
               <div className="inline-flex rounded-full border border-white/60 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-sky-700">
-                Agent Operations Console
+                Agent Operations
               </div>
               <div>
-                <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
-                  Azure Resource Analysis Agent
+                <h1 className="text-xl font-semibold tracking-tight text-slate-950">
+                  Azure Resource Analyzer
                 </h1>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  Main Agent と Subagent の実行、ツールの入出力、Tracing 風の時間軸を同じ画面で確認できます。
-                </p>
               </div>
             </div>
 
@@ -839,31 +1113,24 @@ export default function Home() {
               <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-3">
                 <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Resources</div>
                 <div className="mt-2 text-2xl font-semibold text-slate-950">{resourceCount}</div>
-                <div className="text-xs text-slate-500">parsed objects</div>
               </div>
               <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-3">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Tracing</div>
+                <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Status</div>
                 <div className="mt-2 text-lg font-semibold text-slate-950">
-                  {runMeta?.tracing.enabled ? 'Enabled' : 'Local'}
-                </div>
-                <div className="text-xs text-slate-500">
-                  {runMeta?.tracing.configured ? 'Application Insights ready' : 'UI-derived timeline'}
+                  {isAnalyzing ? 'Running' : 'Ready'}
                 </div>
               </div>
             </div>
 
             <div className="rounded-[24px] border border-slate-200/80 bg-white/72 p-4">
               <div className="mb-3 flex items-center justify-between">
-                <div>
-                  <h2 className="text-sm font-semibold text-slate-900">Resource Input</h2>
-                  <p className="text-xs text-slate-500">ARM export or resource JSON</p>
-                </div>
+                <h2 className="text-sm font-semibold text-slate-900">Resource Input</h2>
                 <button
                   type="button"
                   onClick={loadSampleData}
                   className="rounded-full bg-sky-100 px-3 py-1 text-xs font-medium text-sky-700 transition hover:bg-sky-200"
                 >
-                  Load sample
+                  Sample
                 </button>
               </div>
               <textarea
@@ -880,7 +1147,7 @@ export default function Home() {
                 disabled={!resources.trim() || isAnalyzing}
                 className="w-full rounded-[20px] bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
               >
-                {isAnalyzing ? 'Analyzing…' : 'Run analysis'}
+                {isAnalyzing ? 'Analyzing…' : 'Run Analysis'}
               </button>
               <button
                 type="button"
@@ -894,27 +1161,19 @@ export default function Home() {
                 }}
                 className="w-full rounded-[20px] border border-slate-300 bg-white/80 px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Clear workspace
+                Clear
               </button>
             </form>
 
             <div className="rounded-[24px] border border-slate-200/80 bg-gradient-to-br from-white to-sky-50 p-4">
-              <div className="text-sm font-semibold text-slate-900">Runtime Snapshot</div>
+              <div className="text-sm font-semibold text-slate-900">Execution Stats</div>
               <div className="mt-3 space-y-2 text-sm text-slate-600">
                 <div className="flex items-center justify-between gap-4">
-                  <span>API</span>
-                  <span className="font-medium text-slate-900">{API_BASE_URL}</span>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span>Model</span>
-                  <span className="font-medium text-slate-900">{runMeta?.model ?? 'Waiting'}</span>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span>Tools observed</span>
+                  <span>Tools</span>
                   <span className="font-medium text-slate-900">{toolExecutions.length}</span>
                 </div>
                 <div className="flex items-center justify-between gap-4">
-                  <span>Subagent tasks</span>
+                  <span>Tasks</span>
                   <span className="font-medium text-slate-900">{taskExecutions.length}</span>
                 </div>
               </div>
@@ -925,59 +1184,35 @@ export default function Home() {
             <header className="rounded-[28px] border border-white/70 bg-[linear-gradient(135deg,rgba(255,255,255,0.92),rgba(237,244,255,0.92))] p-5">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                 <div>
-                  <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
-                    Live execution surface
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <h2 className="text-3xl font-semibold tracking-tight text-slate-950">
-                      Agent, Tool, Trace を分離して確認
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h2 className="text-2xl font-semibold tracking-tight text-slate-950">
+                      Agent Execution Monitor
                     </h2>
                     {isAnalyzing && (
-                      <span className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-                        <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
-                        Streaming
+                      <span className="inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-700">
+                        <span className="h-2 w-2 animate-pulse rounded-full bg-sky-500" />
+                        Running
                       </span>
                     )}
                   </div>
-                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                    チャット表示に加えて、Subagent タスク、ツールの入力/出力、時間軸のトレース、水平方向の検証をタブごとに切り替えられます。
-                  </p>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[440px]">
+                <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[380px]">
                   <div className="rounded-2xl border border-slate-200/80 bg-white/78 p-3">
-                    <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Input tokens</div>
-                    <div className="mt-2 text-xl font-semibold text-slate-950">{usage?.inputTokens ?? 0}</div>
+                    <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Input</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-950">{usage?.inputTokens ?? 0}</div>
                   </div>
                   <div className="rounded-2xl border border-slate-200/80 bg-white/78 p-3">
-                    <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Output tokens</div>
-                    <div className="mt-2 text-xl font-semibold text-slate-950">{usage?.outputTokens ?? 0}</div>
+                    <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Output</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-950">{usage?.outputTokens ?? 0}</div>
                   </div>
                   <div className="rounded-2xl border border-slate-200/80 bg-white/78 p-3">
                     <div className="text-xs uppercase tracking-[0.2em] text-slate-500">Duration</div>
-                    <div className="mt-2 text-xl font-semibold text-slate-950">
-                      {usage?.durationMs ? `${(usage.durationMs / 1000).toFixed(1)} s` : 'Waiting'}
+                    <div className="mt-1 text-lg font-semibold text-slate-950">
+                      {usage?.durationMs ? `${(usage.durationMs / 1000).toFixed(1)}s` : '-'}
                     </div>
                   </div>
                 </div>
-              </div>
-
-              <div className="mt-5 flex flex-wrap gap-2">
-                <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-medium text-white">
-                  Main Agent
-                </span>
-                <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-medium text-sky-700">
-                  Explore Agent
-                </span>
-                <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
-                  Security Analyzer
-                </span>
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">
-                  Cost Optimizer
-                </span>
-                <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-medium text-rose-700">
-                  Tool I/O + Trace
-                </span>
               </div>
             </header>
 
@@ -1006,40 +1241,23 @@ export default function Home() {
                 <div className="flex h-full flex-col overflow-hidden">
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 p-3">
                     <div>
-                      <div className="text-sm font-semibold text-slate-900">Conversation View</div>
-                      <div className="text-xs text-slate-500">ユーザー要求、進捗、最終応答を時系列で表示</div>
+                      <div className="text-sm font-semibold text-slate-900">Execution Flow</div>
+                      <div className="text-xs text-slate-500">タスク、ツール、推論を時系列で表示</div>
                     </div>
                     <div className="text-xs text-slate-500">
-                      {messages.length} message{messages.length === 1 ? '' : 's'}
+                      {executionSteps.length} step{executionSteps.length === 1 ? '' : 's'}
                     </div>
                   </div>
 
-                  <div className="flex-1 space-y-4 overflow-auto pr-1">
-                    {messages.length === 0 && (
+                  <div className="flex-1 space-y-3 overflow-auto pr-1">
+                    {executionSteps.length === 0 && (
                       <div className="grid h-full place-items-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50/80 p-6 text-center text-slate-500">
-                        実行するとここに会話と進捗の要約が流れます。
+                        実行するとここに実行フローが表示されます
                       </div>
                     )}
 
-                    {messages.map((message) => (
-                      <div
-                        key={message.id}
-                        className={`max-w-4xl rounded-[24px] px-4 py-4 ${
-                          message.type === 'user'
-                            ? 'ml-auto bg-slate-950 text-white'
-                            : message.type === 'assistant'
-                              ? 'border border-slate-200 bg-white text-slate-900'
-                              : message.type === 'error'
-                                ? 'border border-rose-200 bg-rose-50 text-rose-900'
-                                : 'border border-slate-200 bg-slate-50 text-slate-700'
-                        }`}
-                      >
-                        <div className="mb-2 flex items-center justify-between gap-3 text-xs uppercase tracking-[0.18em] opacity-80">
-                          <span>{message.title}</span>
-                          <span>{formatTimestamp(message.timestamp)}</span>
-                        </div>
-                        <div className="whitespace-pre-wrap text-sm leading-7">{message.content || ' '}</div>
-                      </div>
+                    {executionSteps.map((step) => (
+                      <ExecutionStepCard key={step.id} step={step} />
                     ))}
 
                     <div ref={messagesEndRef} />
