@@ -1,5 +1,5 @@
 # Build stage
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -19,7 +19,7 @@ COPY examples ./examples
 RUN npm run build
 
 # Production stage
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
@@ -36,12 +36,13 @@ COPY --from=builder /app/examples ./examples
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 USER nodejs
 
-# Expose port
+# Expose port for API server
 EXPOSE 3000
 
-# Health check
+# Health check for API server
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "console.log('healthy')" || exit 1
+  CMD node -e "require('http').get('http://localhost:3000/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));" || exit 1
 
-# Start application
-CMD ["node", "dist/index.js"]
+# Default to running the API server
+# Can be overridden with: docker run <image> node dist/index.js
+CMD ["node", "dist/server/index.js"]

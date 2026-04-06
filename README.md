@@ -27,6 +27,14 @@ The Azure Resource Analysis Agent analyzes Azure infrastructure configurations a
 3. Synthesizes findings into a prioritized, actionable report
 4. Provides specific Azure CLI commands and configuration changes
 
+## Project Structure
+
+- `src/` — Backend Fastify API and Claude Agent SDK logic
+- `frontend/` — Next.js chat UI (runs separately on port 4000)
+- `docs/` — Architecture notes and API/UI event flow
+- `examples/` — Sample Azure resource exports for testing
+- `Dockerfile` — Backend container image (API server on port 3000)
+
 ---
 
 ## Why Claude Agent SDK?
@@ -178,20 +186,39 @@ Azure Container Apps offers:
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Azure Container Apps                     │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │         Claude Agent SDK Application                  │  │
-│  │  ┌─────────────────────────────────────────────────┐  │  │
-│  │  │  Main Agent (CLAUDE.md)                        │  │  │
-│  │  │    ├─ Subagent: Security Analyzer              │  │  │
-│  │  │    └─ Subagent: Cost Optimizer                 │  │  │
-│  │  └─────────────────────────────────────────────────┘  │  │
-│  │  ┌─────────────────────────────────────────────────┐  │  │
-│  │  │  Skill: Azure Well-Architected Framework       │  │  │
-│  │  └─────────────────────────────────────────────────┘  │  │
-│  └───────────────────────────────────────────────────────┘  │
-└────────────────────────┬────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                          Browser                                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │  Next.js Chat UI (port 4000)                              │  │
+│  │  - Real-time streaming display                            │  │
+│  │  - Tool execution visibility                              │  │
+│  │  - Progress tracking                                      │  │
+│  └────────────────────┬──────────────────────────────────────┘  │
+└───────────────────────┼─────────────────────────────────────────┘
+                        │ HTTP / SSE
+                        ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Azure Container Apps                          │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │  Fastify API Server (port 3000)                           │  │
+│  │  - REST endpoints (/api/analyze)                          │  │
+│  │  - SSE streaming (/api/analyze/stream)                    │  │
+│  │  - Health check (/health)                                 │  │
+│  └────────────────────┬──────────────────────────────────────┘  │
+│                       │                                          │
+│  ┌────────────────────▼──────────────────────────────────────┐  │
+│  │  Claude Agent SDK Application                             │  │
+│  │  ┌─────────────────────────────────────────────────────┐  │  │
+│  │  │  Main Agent (CLAUDE.md)                            │  │  │
+│  │  │    ├─ Subagent: Explore Agent                      │  │  │
+│  │  │    ├─ Subagent: Security Analyzer                  │  │  │
+│  │  │    └─ Subagent: Cost Optimizer                     │  │  │
+│  │  └─────────────────────────────────────────────────────┘  │  │
+│  │  ┌─────────────────────────────────────────────────────┐  │  │
+│  │  │  Skill: Azure Well-Architected Framework           │  │  │
+│  │  └─────────────────────────────────────────────────────┘  │  │
+│  └───────────────────────────────────────────────────────────┘  │
+└────────────────────────┬────────────────────────────────────────┘
                          │
             ┌────────────┴────────────┐
             ▼                         ▼
@@ -200,6 +227,13 @@ Azure Container Apps offers:
 │  Claude Sonnet 4.5  │   │  Application Insights + Evals   │
 └─────────────────────┘   └─────────────────────────────────┘
 ```
+
+**Key Components:**
+- **Chat UI (Next.js)**: Interactive web interface for real-time agent interaction
+- **API Server (Fastify)**: REST and SSE endpoints for agent execution
+- **Claude Agent SDK**: Core agent runtime with context isolation and streaming
+- **Subagents**: Specialized agents for exploration, security, and cost analysis
+- **Skills (MCP)**: Azure Well-Architected Framework knowledge loaded on-demand
 
 **For detailed architecture**: See [docs/ADR-001-system-architecture.md](docs/ADR-001-system-architecture.md)
 
@@ -306,12 +340,101 @@ Azure Container Apps offers:
 
   API キーを使わない場合は `ANTHROPIC_FOUNDRY_API_KEY` を外し、`az login` などで Microsoft Entra ID 認証を使います。
 
-3. **Run the Agent**:
+3. **Run the Agent (CLI)**:
    ```bash
    npm run dev
    ```
 
    This analyzes the sample Azure export in `examples/sample-azure-export.json`.
+
+### Using the API and Chat UI
+
+This sample now includes a **REST API backend** and **interactive Chat UI** that demonstrates Claude Agent SDK features in real-time.
+
+#### Start the API Server
+
+```bash
+# Build the project
+npm run build
+
+# Start the API server (port 3000)
+npm run start:server
+
+# Or for development with auto-reload
+npm run dev:server
+```
+
+The API server provides:
+- `GET /health` - Health check endpoint
+- `GET /api/models` - List available models
+- `POST /api/analyze` - Analyze Azure resources (JSON response)
+- `POST /api/analyze/stream` - Analyze with SSE streaming (real-time events)
+
+#### Start the Chat UI
+
+```bash
+# Navigate to frontend directory
+cd frontend
+
+# Install dependencies (first time only)
+npm install
+
+# Start the development server (port 4000)
+npm run dev
+```
+
+Then open http://localhost:4000 in your browser.
+
+**Chat UI Features:**
+- 🎯 **Real-time streaming** - See agent responses as they're generated
+- 🔧 **Tool visibility** - Watch tool execution in real-time
+- 📊 **Status updates** - Track analysis progress step-by-step
+- 💬 **Chat-like interface** - Similar to Claude Code / GitHub Copilot
+- 📋 **Sample data loader** - One-click loading of example Azure resources
+
+**How to use:**
+1. Click "Load Sample Data" to populate the sidebar with example Azure resources
+2. Or paste your own Azure resource export JSON
+3. Click "Analyze" to start the analysis
+4. Watch in real-time as the agent:
+   - Uses tools to process data
+   - Generates streaming responses
+   - Produces the final analysis report
+
+### API Usage Examples
+
+**Health Check:**
+```bash
+curl http://localhost:3000/health
+```
+
+**Analyze Resources (non-streaming):**
+```bash
+curl -X POST http://localhost:3000/api/analyze \
+  -H "Content-Type: application/json" \
+  -d '{
+    "resources": [
+      {
+        "id": "/subscriptions/.../providers/Microsoft.Storage/storageAccounts/proddata001",
+        "name": "proddata001",
+        "type": "Microsoft.Storage/storageAccounts",
+        "location": "eastus",
+        "properties": {
+          "allowBlobPublicAccess": true
+        }
+      }
+    ],
+    "scope": "all"
+  }'
+```
+
+**Analyze with Streaming (SSE):**
+```bash
+curl -X POST http://localhost:3000/api/analyze/stream \
+  -H "Content-Type: application/json" \
+  -d '{"resources": [...], "scope": "all"}' \
+  --no-buffer
+```
 
 ### Deploy to Azure Container Apps
 

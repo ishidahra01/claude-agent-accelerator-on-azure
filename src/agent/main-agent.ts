@@ -8,7 +8,7 @@ import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import type { FoundryConfig } from '../config/foundry.js';
-import type { AnalysisRequest, AnalysisReport, AzureResource } from '../types/index.js';
+import type { AnalysisRequest, AnalysisReport, AzureResource, StreamEvent } from '../types/index.js';
 import { azureWafSkills } from '../skills/azure-waf.js';
 import { withTracing, recordEvent, recordAttribute } from '../observability/tracing.js';
 import { evaluateAnalysisReport, logEvaluationResults } from '../observability/evaluation.js';
@@ -136,6 +136,68 @@ export class MainAgent {
   }
 
   /**
+   * Analyze Azure resources with streaming events
+   * Emits events for sub-agents, tools, and responses
+   */
+  async analyzeResourcesWithStreaming(
+    request: AnalysisRequest,
+    onEvent: (event: StreamEvent) => void
+  ): Promise<AnalysisReport> {
+    return withTracing('analyze-resources-streaming', async () => {
+      recordAttribute('resources.count', request.resources.length);
+      recordAttribute('analysis.scope', request.scope || 'all');
+
+      // Send start event
+      onEvent({
+        type: 'status',
+        message: `Analyzing ${request.resources.length} Azure resources...`,
+        timestamp: new Date().toISOString(),
+      });
+
+      const resourcesSummary = this.summarizeResources(request.resources);
+
+      // Build analysis prompt
+      let analysisPrompt = `You are analyzing Azure infrastructure resources using Claude Agent SDK capabilities.\n\n`;
+      analysisPrompt += `IMPORTANT: First, delegate to 'explore-agent' subagent to:\n`;
+      analysisPrompt += `1. Read and parse the resource configurations\n`;
+      analysisPrompt += `2. Search for latest Azure best practices (use WebSearch)\n`;
+      analysisPrompt += `3. Return a concise exploration summary\n\n`;
+      analysisPrompt += `This demonstrates SDK's context isolation - the explore agent processes large data without polluting your context.\n\n`;
+      analysisPrompt += `Resources to analyze:\n${resourcesSummary}\n\n`;
+
+      if (request.scope === 'security' || !request.scope || request.scope === 'all') {
+        analysisPrompt += `Delegate security analysis to the 'security-analyzer' subagent. `;
+      }
+
+      if (request.scope === 'cost' || !request.scope || request.scope === 'all') {
+        analysisPrompt += `Delegate cost optimization analysis to the 'cost-optimizer' subagent. `;
+      }
+
+      analysisPrompt += `\n\nProvide a comprehensive JSON report with the following structure:\n`;
+      analysisPrompt += `{\n`;
+      analysisPrompt += `  "summary": { "resourcesAnalyzed": number, "securityFindings": number, "costSavingsOpportunities": number },\n`;
+      analysisPrompt += `  "security": [{ "severity": "Critical|High|Medium|Low", "resource": "...", "finding": "...", "remediation": "..." }],\n`;
+      analysisPrompt += `  "cost": [{ "resource": "...", "currentCost": "...", "recommendation": "...", "savings": "...", "savingsPercentage": "..." }]\n`;
+      analysisPrompt += `}\n`;
+
+      // Run agent with streaming
+      const result = await this.runAgentWithStreaming(analysisPrompt, onEvent);
+
+      // Parse the analysis report
+      const report = this.parseAnalysisReport(result, request.resources.length);
+
+      // Send completion event
+      onEvent({
+        type: 'report',
+        report,
+        timestamp: new Date().toISOString(),
+      });
+
+      return report;
+    });
+  }
+
+  /**
    * Run agent using Claude Agent SDK query() API
    */
   private async runAgent(prompt: string): Promise<string> {
@@ -177,6 +239,85 @@ export class MainAgent {
 
     } catch (error) {
       console.error('Agent execution error:', error);
+      throw error;
+    }
+
+    return fullResponse;
+  }
+
+  /**
+   * Run agent with streaming events
+   */
+  private async runAgentWithStreaming(
+    prompt: string,
+    onEvent: (event: StreamEvent) => void
+  ): Promise<string> {
+    let fullResponse = '';
+
+    try {
+      const iterator = query({
+        prompt,
+        options: this.agentOptions,
+      });
+
+      for await (const msg of iterator) {
+        // Handle assistant messages
+        if (msg.type === 'assistant') {
+          for (const chunk of msg.message.content) {
+            // Handle text content
+            if (chunk.type === 'text') {
+              fullResponse += chunk.text;
+              onEvent({
+                type: 'text',
+                text: chunk.text,
+                timestamp: new Date().toISOString(),
+              });
+            }
+
+            // Handle tool use
+            if (chunk.type === 'tool_use') {
+              onEvent({
+                type: 'tool_start',
+                toolName: chunk.name,
+                toolInput: chunk.input,
+                timestamp: new Date().toISOString(),
+              });
+            }
+          }
+
+          // Log token usage
+          if (msg.message.usage) {
+            onEvent({
+              type: 'usage',
+              inputTokens: msg.message.usage.input_tokens,
+              outputTokens: msg.message.usage.output_tokens,
+              timestamp: new Date().toISOString(),
+            });
+
+            recordEvent('agent-response', {
+              'usage.inputTokens': msg.message.usage.input_tokens,
+              'usage.outputTokens': msg.message.usage.output_tokens,
+            });
+          }
+        }
+
+        // Handle tool results (if available)
+        if (msg.type === 'result' && 'content' in msg) {
+          // Extract tool name if available from the result
+          onEvent({
+            type: 'tool_end',
+            toolName: 'tool', // SDK doesn't expose tool name in result
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
+
+    } catch (error) {
+      onEvent({
+        type: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString(),
+      });
       throw error;
     }
 

@@ -7,7 +7,9 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
+    "start:server": "node dist/server/index.js",
     "dev": "tsx watch src/index.ts",
+    "dev:server": "tsx watch src/server/index.ts",
     "scenario": "tsx src/scenarios.ts",
     "scenario:1": "tsx src/scenarios.ts 1",
     "scenario:2": "tsx src/scenarios.ts 2",
@@ -28,12 +30,15 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.92",
     "@azure/monitor-opentelemetry": "^1.7.0",
+    "@fastify/cors": "^11.2.0",
+    "@fastify/static": "^9.0.0",
     "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/sdk-trace-node": "^1.26.0",
-    "@opentelemetry/sdk-trace-base": "^1.26.0",
     "@opentelemetry/resources": "^1.26.0",
+    "@opentelemetry/sdk-trace-base": "^1.26.0",
+    "@opentelemetry/sdk-trace-node": "^1.26.0",
     "@opentelemetry/semantic-conventions": "^1.27.0",
     "dotenv": "^16.4.5",
+    "fastify": "^5.8.4",
     "zod": "^4.3.6"
   },
   "devDependencies": {

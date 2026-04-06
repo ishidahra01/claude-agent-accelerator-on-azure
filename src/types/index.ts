@@ -88,3 +88,16 @@ export interface RoadmapItem {
   estimatedEffort: string;
   estimatedSavings?: string;
 }
+
+/**
+ * Stream event types for real-time agent execution visibility
+ */
+export type StreamEvent =
+  | { type: 'status'; message: string; timestamp: string }
+  | { type: 'tool_start'; toolName: string; toolInput: any; timestamp: string }
+  | { type: 'tool_end'; toolName: string; timestamp: string }
+  | { type: 'text'; text: string; timestamp: string }
+  | { type: 'usage'; inputTokens: number; outputTokens: number; timestamp: string }
+  | { type: 'report'; report: AnalysisReport; timestamp: string }
+  | { type: 'error'; error: string; timestamp: string }
+  | { type: 'done'; timestamp: string };
