@@ -3,6 +3,7 @@
  * Provides REST and SSE endpoints for chat UI integration
  */
 
+import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { MainAgent } from '../agent/main-agent.js';
@@ -16,9 +17,11 @@ const fastify = Fastify({
   },
 });
 
+const corsOrigin = process.env.CORS_ORIGIN || '*';
+
 // Enable CORS for frontend access
 await fastify.register(cors, {
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: corsOrigin,
 });
 
 // Initialize observability
@@ -97,11 +100,16 @@ fastify.post<{
     });
   }
 
+  reply.hijack();
+
   // Set up SSE headers
   reply.raw.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+    'Access-Control-Allow-Origin': corsOrigin,
+    'Vary': 'Origin',
   });
 
   try {

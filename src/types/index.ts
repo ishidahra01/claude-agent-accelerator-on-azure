@@ -89,15 +89,118 @@ export interface RoadmapItem {
   estimatedSavings?: string;
 }
 
+export interface AgentDescriptor {
+  name: string;
+  description: string;
+}
+
+export interface RuntimeMcpServer {
+  name: string;
+  status: string;
+}
+
+export interface StreamUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationInputTokens?: number;
+  cacheReadInputTokens?: number;
+  totalCostUsd?: number;
+  durationMs?: number;
+  numTurns?: number;
+}
+
 /**
  * Stream event types for real-time agent execution visibility
  */
 export type StreamEvent =
+  | {
+      type: 'run_started';
+      requestId: string;
+      resourceCount: number;
+      scope: AnalysisRequest['scope'];
+      model: string;
+      tracing: { enabled: boolean; configured: boolean };
+      agents: AgentDescriptor[];
+      mcpServers: string[];
+      timestamp: string;
+    }
+  | {
+      type: 'runtime_context';
+      cwd: string;
+      tools: string[];
+      mcpServers: RuntimeMcpServer[];
+      agents: string[];
+      skills: string[];
+      model: string;
+      permissionMode: string;
+      apiKeySource: string;
+      timestamp: string;
+    }
   | { type: 'status'; message: string; timestamp: string }
-  | { type: 'tool_start'; toolName: string; toolInput: any; timestamp: string }
-  | { type: 'tool_end'; toolName: string; timestamp: string }
+  | {
+      type: 'task_started';
+      taskId: string;
+      description: string;
+      taskType?: string;
+      workflowName?: string;
+      prompt?: string;
+      toolUseId?: string;
+      timestamp: string;
+    }
+  | {
+      type: 'task_progress';
+      taskId: string;
+      description: string;
+      lastToolName?: string;
+      summary?: string;
+      usage?: { totalTokens: number; toolUses: number; durationMs: number };
+      toolUseId?: string;
+      timestamp: string;
+    }
+  | {
+      type: 'task_completed';
+      taskId: string;
+      status: 'completed' | 'failed' | 'stopped';
+      summary: string;
+      outputFile: string;
+      usage?: { totalTokens: number; toolUses: number; durationMs: number };
+      toolUseId?: string;
+      timestamp: string;
+    }
+  | {
+      type: 'tool_start';
+      toolUseId: string;
+      toolName: string;
+      toolInput: unknown;
+      parentToolUseId: string | null;
+      timestamp: string;
+    }
+  | {
+      type: 'tool_progress';
+      toolUseId: string;
+      toolName: string;
+      elapsedTimeSeconds: number;
+      parentToolUseId: string | null;
+      taskId?: string;
+      timestamp: string;
+    }
+  | {
+      type: 'tool_end';
+      toolUseId: string;
+      toolName: string;
+      toolOutput?: unknown;
+      isError?: boolean;
+      parentToolUseId: string | null;
+      timestamp: string;
+    }
+  | {
+      type: 'tool_summary';
+      summary: string;
+      precedingToolUseIds: string[];
+      timestamp: string;
+    }
   | { type: 'text'; text: string; timestamp: string }
-  | { type: 'usage'; inputTokens: number; outputTokens: number; timestamp: string }
+  | { type: 'usage'; usage: StreamUsage; timestamp: string }
   | { type: 'report'; report: AnalysisReport; timestamp: string }
   | { type: 'error'; error: string; timestamp: string }
   | { type: 'done'; timestamp: string };
