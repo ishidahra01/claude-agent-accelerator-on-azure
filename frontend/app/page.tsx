@@ -500,7 +500,7 @@ function ExecutionStepCard({ step }: { step: ExecutionStep }) {
       case 'user':
         return '👤';
       case 'reasoning':
-        return '🤔';
+        return '💭';
       case 'task':
         return '🤖';
       case 'tool':
