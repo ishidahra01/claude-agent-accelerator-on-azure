@@ -3,7 +3,7 @@
  * Orchestrates analysis using Claude Agent SDK with subagents
  */
 
-import { query, createSdkMcpServer, type Options } from '@anthropic-ai/claude-agent-sdk';
+import { query, createSdkMcpServer, type Options, type PermissionMode } from '@anthropic-ai/claude-agent-sdk';
 import { randomUUID } from 'crypto';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -64,6 +64,7 @@ export class MainAgent {
 
   constructor(foundryConfig: FoundryConfig) {
     this.model = foundryConfig.model;
+    const permissionMode = this.resolvePermissionMode();
 
     // Load agent instructions
     const claudePath = join(__dirname, '../../.claude/CLAUDE.md');
@@ -86,6 +87,8 @@ export class MainAgent {
     this.agentOptions = {
       model: this.model,
       systemPrompt: claudeMd,
+      permissionMode,
+      allowDangerouslySkipPermissions: permissionMode === 'bypassPermissions',
       mcpServers: {
         'azure-waf': wafSkillServer,
         // MS Learn Doc MCP server for latest Azure documentation
@@ -415,17 +418,20 @@ export class MainAgent {
           });
         }
 
-        if (msg.type === 'user' && msg.parent_tool_use_id && typeof msg.tool_use_result !== 'undefined') {
-          const trackedTool = toolCalls.get(msg.parent_tool_use_id);
-          onEvent({
-            type: 'tool_end',
-            toolUseId: msg.parent_tool_use_id,
-            toolName: trackedTool?.toolName || 'tool',
-            toolOutput: this.stringifyPreview(msg.tool_use_result),
-            isError: this.isToolErrorResult(msg.tool_use_result),
-            parentToolUseId: trackedTool?.parentToolUseId ?? null,
-            timestamp: new Date().toISOString(),
-          });
+        if (msg.type === 'user') {
+          for (const toolResult of this.extractToolResults(msg)) {
+            const trackedTool = toolCalls.get(toolResult.toolUseId);
+
+            onEvent({
+              type: 'tool_end',
+              toolUseId: toolResult.toolUseId,
+              toolName: trackedTool?.toolName || 'tool',
+              toolOutput: this.stringifyPreview(toolResult.output),
+              isError: toolResult.isError,
+              parentToolUseId: trackedTool?.parentToolUseId ?? msg.parent_tool_use_id ?? null,
+              timestamp: new Date().toISOString(),
+            });
+          }
         }
 
         // Handle assistant messages
@@ -549,6 +555,101 @@ export class MainAgent {
     }
 
     return false;
+  }
+
+  private resolvePermissionMode(): PermissionMode {
+    const configuredMode = process.env.CLAUDE_PERMISSION_MODE?.trim() as PermissionMode | undefined;
+
+    if (configuredMode) {
+      return configuredMode;
+    }
+
+    // The API server runs headlessly, so interactive approval prompts will fail.
+    return 'bypassPermissions';
+  }
+
+  private extractToolResults(msg: {
+    message: unknown;
+    parent_tool_use_id: string | null;
+    tool_use_result?: unknown;
+  }): Array<{ toolUseId: string; output: unknown; isError: boolean }> {
+    const results = new Map<string, { output: unknown; isError: boolean }>();
+
+    if (msg.parent_tool_use_id && typeof msg.tool_use_result !== 'undefined') {
+      results.set(msg.parent_tool_use_id, {
+        output: msg.tool_use_result,
+        isError: this.isToolErrorResult(msg.tool_use_result),
+      });
+    }
+
+    for (const block of this.getMessageContentBlocks(msg.message)) {
+      const extracted = this.extractToolResultBlock(block);
+
+      if (!extracted) {
+        continue;
+      }
+
+      results.set(extracted.toolUseId, {
+        output: extracted.output,
+        isError: extracted.isError,
+      });
+    }
+
+    return Array.from(results.entries()).map(([toolUseId, result]) => ({
+      toolUseId,
+      output: result.output,
+      isError: result.isError,
+    }));
+  }
+
+  private getMessageContentBlocks(message: unknown): unknown[] {
+    if (!message || typeof message !== 'object' || !('content' in message)) {
+      return [];
+    }
+
+    const { content } = message as { content?: unknown };
+    return Array.isArray(content) ? content : [];
+  }
+
+  private extractToolResultBlock(block: unknown): { toolUseId: string; output: unknown; isError: boolean } | null {
+    if (!block || typeof block !== 'object') {
+      return null;
+    }
+
+    const candidate = block as Record<string, unknown>;
+    const type = typeof candidate.type === 'string' ? candidate.type : '';
+    const toolUseId = typeof candidate.tool_use_id === 'string' ? candidate.tool_use_id : null;
+
+    if (!toolUseId || !this.isToolResultBlockType(type)) {
+      return null;
+    }
+
+    const output = 'content' in candidate && typeof candidate.content !== 'undefined'
+      ? candidate.content
+      : candidate;
+
+    return {
+      toolUseId,
+      output,
+      isError:
+        this.isToolErrorResult(candidate) ||
+        this.isToolErrorResult(output) ||
+        this.hasToolErrorType(candidate) ||
+        this.hasToolErrorType(output),
+    };
+  }
+
+  private isToolResultBlockType(type: string): boolean {
+    return type === 'tool_result' || type === 'mcp_tool_result' || type.endsWith('_tool_result');
+  }
+
+  private hasToolErrorType(value: unknown): boolean {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+
+    const type = 'type' in value && typeof value.type === 'string' ? value.type : null;
+    return Boolean(type && type.endsWith('_tool_result_error'));
   }
 
   /**
